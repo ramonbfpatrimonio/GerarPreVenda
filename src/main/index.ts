@@ -49,6 +49,14 @@ if (!app.requestSingleInstanceLock()) {
   })
   app.whenReady().then(() => {
     app.setAppUserModelId('br.com.ramon.gerarprevenda')
+    // O user agent do Electron leva o nome do programa ("Gerar Pré-Venda").
+    // O "é" chega ao Supabase em Latin-1 e o banco recusa ao gravar a sessão
+    // de login (invalid byte sequence for encoding "UTF8": 0xe9).
+    // Por isso a identificação vai só com caracteres ASCII.
+    app.userAgentFallback = app.userAgentFallback
+      .replace(/Gerar Pr[ée]-Venda/gi, 'GerarPreVenda')
+      .normalize('NFD')
+      .replace(/[^\x20-\x7E]/g, '')
     registrarIpc(() => janela)
     configurarAtualizacao(() => janela)
     criarJanela()

@@ -48,8 +48,15 @@ export interface Nuvem {
   trocarSenha(id: string, senha: string): Promise<void>
 }
 
-const URL = import.meta.env.VITE_SUPABASE_URL as string | undefined
-const CHAVE = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+// Projeto Supabase do Gerar Pré-Venda. A chave "anon" é pública por natureza:
+// quem protege os dados são as políticas RLS (supabase/migrations).
+// Se existir um .env com VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY, ele tem prioridade.
+const URL_PADRAO = 'https://pgbwgdnclmzlszvacdfo.supabase.co'
+const CHAVE_PADRAO =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBnYndnZG5jbG16bHN6dmFjZGZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIyNTE2MDYsImV4cCI6MjEwNzgyNzYwNn0.PaE9vlT9nU5BryxyH9BhLVnKjv7dEkwh4g9uY7ySIsk'
+
+const URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() || URL_PADRAO
+const CHAVE = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim() || CHAVE_PADRAO
 
 let cliente: SupabaseClient | null = null
 function sb(): SupabaseClient {

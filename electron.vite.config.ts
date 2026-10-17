@@ -12,6 +12,7 @@ export default defineConfig({
     resolve: { alias: { '@shared': resolve('src/shared') } }
   },
   renderer: {
+    envDir: resolve(__dirname),
     resolve: { alias: { '@shared': resolve('src/shared') } },
     plugins: [react()]
   }
