@@ -1,0 +1,39 @@
+appId: br.com.ramon.gerarprevenda
+productName: Gerar Pré-Venda
+directories:
+  buildResources: build
+  output: dist
+files:
+  - out/**
+  - resources/**
+  - package.json
+  - "!**/*.map"
+  - "!out-demo/**"
+asarUnpack:
+  - node_modules/pdfjs-dist/**
+  - node_modules/msnodesqlv8/**
+  - resources/**
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.ico
+  artifactName: GerarPreVenda-Setup-${version}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: Gerar Pré-Venda
+  uninstallDisplayName: Gerar Pré-Venda
+  deleteAppDataOnUninstall: false
+# Atualização automática: cada `npm run release` publica um Release no GitHub
+# e os programas instalados baixam a versão nova sozinhos.
+publish:
+  provider: github
+  owner: ramonbfpatrimonio
+  repo: gerar-pre-venda
+  releaseType: release
+# O driver ODBC nativo (msnodesqlv8) é opcional: veja "Driver nativo" no LEIAME.
+npmRebuild: false
