@@ -152,7 +152,7 @@ export function Pagina_Backups({ visivel }: { visivel: boolean }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <section className="caixa bloco">
             <h2>Empresa na nuvem</h2>
-            <p className="fraco mini">Baixa um arquivo com usuários, conexões, histórico de pré-vendas, eventos e aparência de {empresaAtual?.nome ?? 'empresa'}. Senhas não entram.</p>
+            <p className="fraco mini">Baixa um arquivo com usuários, conexões, histórico de pré-vendas e eventos de {empresaAtual?.nome ?? 'empresa'}. Senhas não entram.</p>
             {!podeNuvem && <Alerta tipo="aviso">Precisa de internet.</Alerta>}
             <div><button className="botao" onClick={() => void baixarNuvem()} disabled={!podeNuvem || !!ocupado}>{ocupado === 'nuvem' ? <span className="spinner" /> : <Icone nome="backup" />} Baixar backup da empresa</button></div>
           </section>

@@ -18,7 +18,7 @@ de cada cliente (SQL Server) e grava a pré-venda — tudo numa única transaç�
 
 ### Projeto novo (uma vez)
 1. Crie um projeto em <https://supabase.com>.
-2. **SQL Editor** → rode, nesta ordem, `001_inicial.sql`, `002_empresas.sql` e `003_eventos_aparencia.sql` (pasta `supabase/migrations`).
+2. **SQL Editor** → rode, nesta ordem, `001_inicial.sql`, `002_empresas.sql` e `003_eventos.sql` (pasta `supabase/migrations`).
 3. **Database → Extensions** → habilite **pg_cron** e rode o `002_empresas.sql` de novo (agenda a limpeza automática do histórico).
 4. **Edge Functions → Deploy a new function → Via Editor**: nome `admin-usuarios`, cole `supabase/functions/admin-usuarios/index.ts`, **Deploy**.
 5. **Authentication → Sign In / Providers → Email**: desligue *Allow new users to sign up*.
@@ -27,10 +27,10 @@ de cada cliente (SQL Server) e grava a pré-venda — tudo numa única transaç�
    update public.perfis set papel = 'super_admin', nome = 'Ramon' where email = 'seu-email@exemplo.com';
    ```
 
-### Atualização da versão 1.1 para a 1.2 (área administrativa, eventos, aparência)
-1. **SQL Editor** → cole e rode `supabase/migrations/003_eventos_aparencia.sql` (pode rodar de novo sem problema).
-   Ele cria a tabela de **eventos do sistema**, a de **aparência** (papel de parede e logo) e os gatilhos que registram
-   sozinhos quem criou, alterou ou excluiu conexões, usuários, empresas, aparência e pré-vendas.
+### Atualização da versão 1.1 para a 1.2 (área administrativa e eventos)
+1. **SQL Editor** → cole e rode `supabase/migrations/003_eventos.sql` (pode rodar de novo sem problema).
+   Ele cria a tabela de **eventos do sistema** e os gatilhos que registram sozinhos quem criou, alterou ou excluiu
+   conexões, usuários, empresas e pré-vendas. A aparência não usa a nuvem (fica em cada computador).
 2. A Edge Function não mudou: não precisa publicar de novo.
 3. Publique o instalador 1.2 (`npm run release`): os computadores atualizam sozinhos.
 
@@ -73,21 +73,29 @@ e do pedido em todos os computadores da empresa, mas o cadastro continua lá par
 ### Eventos do sistema
 Lista quem **criou, alterou, excluiu, salvou, gerou, entrou, saiu, fez backup, restaurou**, com **dia, hora com
 segundos, estação (nome do computador) e usuário**. Filtros por período, ação, item e texto; **Exportar para Excel**.
-Clique numa linha para ver os detalhes (o que era antes e o que ficou). Os registros de conexões, usuários, empresas,
-aparência e pré-vendas são gravados pelo próprio banco (gatilhos), então não dependem do programa. Sem internet,
+Clique numa linha para ver os detalhes (o que era antes e o que ficou). Os registros de conexões, usuários, empresas
+e pré-vendas são gravados pelo próprio banco (gatilhos), então não dependem do programa. Sem internet,
 os eventos ficam na fila junto com as pré-vendas. São apagados junto com o histórico (prazo da empresa).
 
 ### Backups
 - **Este computador:** um backup automático por dia ao abrir o programa em `Documentos\Gerar Pre-Venda\Backups`
   (conexões com as senhas do SQL cifradas, fila sem internet e aparência). Ficam os 30 mais recentes.
   **Restaurar** faz antes um backup do estado atual. As senhas só abrem no mesmo usuário do Windows.
-- **Empresa na nuvem:** baixa um `.json` com usuários, conexões, histórico, eventos e aparência (sem senhas).
+- **Empresa na nuvem:** baixa um `.json` com usuários, conexões, histórico e eventos (sem senhas).
 - **Senhas do SQL para outro computador:** Exportar/Importar conexões (arquivo protegido por senha).
 
 ### Aparência (papel de parede e logo do cliente)
-Em **Aparência**, importe o papel de parede (ocupa 3/4 da tela de login, à esquerda; ideal 1920×1080) e a logo do
-cliente (PNG transparente). As imagens são reduzidas sozinhas, guardadas na empresa e copiadas para cada computador,
-então aparecem no login mesmo antes de entrar ou sem internet. A logo também vai para a barra superior.
+A aparência é **local**: fica só no computador onde foi configurada (arquivo `aparencia.json` na pasta do programa,
+incluído no backup local), não vai para a nuvem. Cada computador pode ter a sua.
+
+Em **Aparência**, importe o papel de parede (3/4 da tela de login, à esquerda) e a logo do cliente (PNG transparente):
+- O papel de parede **acompanha o tamanho da janela e nunca estica** (a proporção é sempre mantida). Dois ajustes:
+  **Preencher** cobre toda a área e recorta só as sobras das bordas; **Imagem inteira** mostra a imagem toda e
+  completa as sobras com a própria imagem desfocada.
+- **Qualidade:** imagens até 4K (3840 px) são guardadas com o **arquivo original**, sem recomprimir. Maiores que 4K
+  são reduzidas para 3840 px em etapas, com qualidade alta. Se a imagem for menor que a área da tela, a página avisa
+  que pode perder nitidez e mostra o tamanho ideal para aquele monitor.
+- A logo (até 1000 px fica o original) aparece no login e na barra superior.
 Ícone do programa, da área de trabalho e a imagem lateral do instalador ficam em `build/` e `resources/`.
 
 A separação é feita **pelo banco** (RLS), não só pela tela: mesmo com o programa modificado, uma empresa

@@ -236,7 +236,7 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
     [internet, offline]
   )
 
-  // ---- aparência (fundo e logo da empresa): cópia local para a tela de login
+  // ---- aparência (fundo e logo): guardada só neste computador
   const [aparencia, setAparencia] = useState<AparenciaLocal | null>(null)
   useEffect(() => {
     window.api.aparencia.ler().then(setAparencia).catch(() => undefined)
@@ -275,22 +275,10 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
     [empresas]
   )
 
+  // A aparência é só deste computador (não vai para a nuvem)
   const recarregarAparencia = useCallback(async () => {
-    if (!empresaAtual || !internet || offline) return
-    try {
-      const a = await nuvem.aparencia(empresaAtual.id)
-      const local: AparenciaLocal | null = a
-        ? { empresaId: empresaAtual.id, empresaNome: empresaAtual.nome, fundo: a.fundo, logo: a.logo, atualizadoEm: a.atualizado_em }
-        : null
-      await window.api.aparencia.salvar(local)
-      setAparencia(local)
-    } catch {
-      /* mantém a cópia local */
-    }
-  }, [empresaAtual?.id, internet, offline]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    void recarregarAparencia()
-  }, [recarregarAparencia])
+    setAparencia(await window.api.aparencia.ler().catch(() => null))
+  }, [])
 
   const valor = useMemo<Sessao>(
     () => ({

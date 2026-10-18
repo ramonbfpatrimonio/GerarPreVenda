@@ -343,7 +343,10 @@ p { margin: 0; }
 
 /* ------------------------------------------------------------------ login (fundo 3/4 + formulário) */
 .login { min-height: 100%; height: 100%; display: grid; grid-template-columns: 3fr minmax(360px, 1fr); }
-.login .fundo-login { background-color: #0b3d44; background-size: cover; background-position: center; }
+.fundo-login { position: relative; overflow: hidden; background-color: #0b3d44; min-width: 0; min-height: 0; }
+.fundo-login .fundo-imagem { position: absolute; inset: 0; background-repeat: no-repeat; background-position: center; background-size: cover; }
+.fundo-login.inteira .fundo-imagem { background-size: contain; }
+.fundo-login .fundo-borrado { position: absolute; inset: -60px; background-repeat: no-repeat; background-position: center; background-size: cover; filter: blur(36px) brightness(0.72) saturate(1.1); transform: scale(1.08); }
 .login .lado-form {
   background: var(--superficie); padding: 48px 40px; display: flex; flex-direction: column; justify-content: center; gap: 20px;
   border-left: 1px solid var(--linha); box-shadow: -12px 0 40px rgba(0,0,0,0.12);
@@ -354,8 +357,7 @@ p { margin: 0; }
 @media (max-width: 900px) { .login { grid-template-columns: 1fr; } .login .fundo-login { display: none; } }
 
 /* ------------------------------------------------------------------ aparência */
-.previa-login { display: grid; grid-template-columns: 3fr 1fr; height: 300px; border-radius: var(--raio); overflow: hidden; border: 1px solid var(--linha-forte); }
-.previa-login .previa-fundo { background-size: cover; background-position: center; background-color: #0b3d44; }
+.previa-login { display: grid; grid-template-columns: 3fr 1fr; aspect-ratio: 16 / 9; border-radius: var(--raio); overflow: hidden; border: 1px solid var(--linha-forte); }
 .previa-login .previa-form { background: #fff; padding: 18px 14px; display: flex; flex-direction: column; gap: 8px; justify-content: center; }
 .previa-login .previa-form img { max-width: 100%; max-height: 54px; object-fit: contain; align-self: flex-start; }
 .previa-login .previa-form .ficticio { height: 22px; border: 1px solid var(--linha-forte); border-radius: 4px; }
@@ -378,3 +380,11 @@ p { margin: 0; }
 .miniatura.logo { height: 120px; background-size: contain; background-repeat: no-repeat; background-color: #fff; background-origin: content-box; padding: 14px; }
 .miniatura span { position: absolute; right: 8px; bottom: 8px; font-size: 11px; background: rgba(0,0,0,.55); color: #fff; padding: 2px 7px; border-radius: 10px; }
 @media (max-width: 1250px) { .grade-backups, .grade-aparencia { grid-template-columns: 1fr; } }
+
+.ajuste-fundo { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ajuste-fundo label { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; row-gap: 2px; align-items: start; border: 1px solid var(--linha-forte); border-radius: var(--raio); padding: 9px 10px; cursor: pointer; }
+.ajuste-fundo label input { grid-row: span 2; margin-top: 3px; }
+.ajuste-fundo label small { color: var(--grafite); font-size: 11.5px; line-height: 1.35; }
+.ajuste-fundo label.marcado { border-color: var(--acao); box-shadow: 0 0 0 1px var(--acao) inset; }
+
+.login .lado-form > * { width: 100%; max-width: 440px; }

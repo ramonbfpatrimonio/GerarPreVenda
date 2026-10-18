@@ -89,9 +89,6 @@ export interface Nuvem {
   // eventos do sistema
   registrarEvento(e: NovoEvento): Promise<void>
   eventos(filtro: { desde?: string; texto?: string; acao?: string; entidade?: string; empresaId?: string | null; limite?: number }): Promise<Evento[]>
-  // aparência (fundo/logo da tela de login)
-  aparencia(empresaId: string): Promise<{ fundo: string | null; logo: string | null; atualizado_em: string } | null>
-  salvarAparencia(empresaId: string, a: { fundo: string | null; logo: string | null }): Promise<void>
   // backup da nuvem
   backupEmpresa(empresaId: string): Promise<Record<string, unknown>>
 }
@@ -337,32 +334,20 @@ function fabricar(obter: () => SupabaseClient): Nuvem {
     return ((await ou(q)) ?? []) as Evento[]
   },
 
-  async aparencia(empresaId) {
-    return (await ou(sb().from('aparencia_empresa').select('fundo, logo, atualizado_em').eq('empresa_id', empresaId).maybeSingle())) as {
-      fundo: string | null
-      logo: string | null
-      atualizado_em: string
-    } | null
-  },
-  async salvarAparencia(empresaId, a) {
-    await ou(sb().from('aparencia_empresa').upsert({ empresa_id: empresaId, fundo: a.fundo, logo: a.logo, atualizado_em: new Date().toISOString() }))
-  },
-
   async backupEmpresa(empresaId) {
-    const [empresa, usuarios, conexoes, historico, eventos, aparencia] = await Promise.all([
+    const [empresa, usuarios, conexoes, historico, eventos] = await Promise.all([
       ou(sb().from('empresas').select('*').eq('id', empresaId).maybeSingle()),
       ou(sb().from('perfis').select('id, nome, email, papel, ativo, criado_em').eq('empresa_id', empresaId)),
       ou(sb().from('conexoes_empresa').select('*').eq('empresa_id', empresaId)),
       ou(sb().from('prevendas_geradas').select('*').eq('empresa_id', empresaId).order('criado_em')),
-      ou(sb().from('eventos_sistema').select('*').eq('empresa_id', empresaId).order('criado_em')),
-      ou(sb().from('aparencia_empresa').select('*').eq('empresa_id', empresaId).maybeSingle())
+      ou(sb().from('eventos_sistema').select('*').eq('empresa_id', empresaId).order('criado_em'))
     ])
     return {
       formato: 'gerar-pre-venda/backup-empresa',
       versao: 1,
       gerado_em: new Date().toISOString(),
       observacao: 'Senhas não fazem parte do backup (nem dos usuários, nem do SQL).',
-      empresa, usuarios, conexoes, historico, eventos, aparencia
+      empresa, usuarios, conexoes, historico, eventos
     }
   }
   }

@@ -123,6 +123,8 @@ export interface Aparencia {
   empresaNome: string
   fundo: string | null
   logo: string | null
+  /** 'preencher': cobre toda a área (recorta as sobras); 'inteira': mostra a imagem toda */
+  ajuste?: 'preencher' | 'inteira'
   atualizadoEm: string
 }
 

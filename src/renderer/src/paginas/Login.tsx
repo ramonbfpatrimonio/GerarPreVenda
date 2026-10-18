@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSessao } from '../contexto'
 import { nuvem } from '../servicos'
 import { Alerta } from '../componentes/Modal'
-import fundoPadrao from '../assets/fundo-padrao.jpg'
+import { FundoLogin } from '../componentes/FundoLogin'
 import logoPadrao from '../assets/logo.png'
 
 /**
@@ -37,7 +37,7 @@ export function Pagina_Login() {
 
   return (
     <div className="login">
-      <div className="fundo-login" style={{ backgroundImage: `url(${aparencia?.fundo || fundoPadrao})` }} role="img" aria-label={aparencia?.empresaNome ?? 'Gerar Pré-Venda'} />
+      <FundoLogin src={aparencia?.fundo} ajuste={aparencia?.ajuste} rotulo={aparencia?.empresaNome || 'Gerar Pré-Venda'} />
       <form className="lado-form" onSubmit={enviar}>
         <img className="logo-login" src={aparencia?.logo || logoPadrao} alt={aparencia?.empresaNome ?? 'Gerar Pré-Venda'} />
         <div>

@@ -18,22 +18,18 @@ update public.conexoes_empresa set dados = dados || '{"banco":"B2"}' where id = 
 update public.conexoes_empresa set dados = dados || '{"ativo":false}' where id = 'cccccccc-0000-0000-0000-000000000001';
 update public.conexoes_empresa set dados = dados || '{"ativo":true}' where id = 'cccccccc-0000-0000-0000-000000000001';
 delete from public.conexoes_empresa where id = 'cccccccc-0000-0000-0000-000000000001';
--- aparência
-insert into public.aparencia_empresa (empresa_id, fundo, logo) values (public.minha_empresa(), 'data:image/jpeg;base64,AAA', 'data:image/png;base64,BBB');
-update public.aparencia_empresa set logo = 'data:image/png;base64,CCC' where empresa_id = public.minha_empresa();
 -- reativa a Deyse (desativada no teste 01)
 update public.perfis set ativo = true where email = 'deyse@hage.com';
 do $$
 declare v text;
 begin
   select string_agg(acao || ':' || entidade, ',' order by id) into v from public.eventos_sistema;
-  assert v = 'criou:conexão,editou:conexão,desativou:conexão,ativou:conexão,excluiu:conexão,salvou:aparência,salvou:aparência,ativou:usuário',
+  assert v = 'criou:conexão,editou:conexão,desativou:conexão,ativou:conexão,excluiu:conexão,ativou:usuário',
     'sequência de eventos inesperada: ' || coalesce(v, '(nenhum)');
   assert (select bool_and(estacao = 'CAIXA-02') from public.eventos_sistema), 'estação não registrada';
   assert (select bool_and(usuario_nome = 'Admin Hage') from public.eventos_sistema), 'usuário não registrado';
   assert (select bool_and(empresa_id = public.minha_empresa()) from public.eventos_sistema), 'empresa errada no evento';
   assert (select detalhes -> 'campos' from public.eventos_sistema where acao = 'editou' and entidade = 'conexão') = '["banco"]'::jsonb, 'campos alterados não registrados';
-  assert (select descricao from public.eventos_sistema where acao = 'salvou' order by id desc limit 1) = 'logo', 'descrição da aparência';
 end $$;
 -- ninguém altera um evento
 do $$ begin
@@ -41,7 +37,7 @@ do $$ begin
   raise exception 'FALHOU: evento foi alterado';
 end $$;
 reset role;
-\echo '✓ admin: criar, editar, desativar, ativar e excluir conexão, aparência e usuário viram eventos com estação, usuário e empresa'
+\echo '✓ admin: criar, editar, desativar, ativar e excluir conexão e usuário viram eventos com estação, usuário e empresa'
 
 -- ---------------------------------------------------------------- operadora da Hage gera pré-venda e registra login
 set role authenticated;
@@ -55,11 +51,6 @@ select public.registrar_evento('entrou', 'sessão', 'Login no programa', '{}', '
 select public.registrar_evento('saiu', 'sessão', 'x', '{}', 'ev-2', null, 'bbbbbbbb-0000-0000-0000-000000000000');
 do $$ begin
   assert (select count(*) from public.eventos_sistema) = 0, 'operador não pode LER eventos';
-  assert (select count(*) from public.aparencia_empresa) = 1, 'operador deve ler a aparência da própria empresa';
-end $$;
-do $$ begin
-  begin update public.aparencia_empresa set logo = null; exception when insufficient_privilege then return; end;
-  if found then raise exception 'FALHOU: operador alterou aparência'; end if;
 end $$;
 reset role;
 do $$ begin
@@ -70,16 +61,14 @@ do $$ begin
   assert (select estacao from eventos_sistema where acao = 'gerou') = 'VENDAS-01', 'estação da pré-venda';
   assert (select criado_em from eventos_sistema where acao = 'gerou') < now() - interval '2 hours', 'evento da pré-venda deve ter a hora em que foi gerada';
   assert (select descricao from eventos_sistema where acao = 'gerou') like 'Pré-venda 000777/2026 em Hage › COMERCIO%', 'descrição da pré-venda';
-  assert (select logo from aparencia_empresa) = 'data:image/png;base64,CCC', 'operador conseguiu mudar a logo';
 end $$;
-\echo '✓ operador: pré-venda gerada vira evento (com a hora original); login registrado sem duplicar; não lê eventos nem altera aparência'
+\echo '✓ operador: pré-venda gerada vira evento (com a hora original); login registrado sem duplicar; não lê eventos'
 
 -- ---------------------------------------------------------------- outra empresa e super
 set role authenticated;
 set request.jwt.claim.sub = 'b0000000-0000-0000-0000-00000000000a';  -- admin da Norte
 do $$ begin
   assert (select count(*) from public.eventos_sistema) = 0, 'admin da Norte viu eventos da Hage';
-  assert (select count(*) from public.aparencia_empresa) = 0, 'Norte viu a aparência da Hage';
 end $$;
 insert into public.eventos_sistema (acao, entidade, descricao, empresa_id) values ('exportou', 'backup', 'tentando gravar na Hage', (select id from public.empresas limit 1));
 do $$ begin

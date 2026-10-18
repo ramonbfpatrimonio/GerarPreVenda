@@ -31,8 +31,8 @@ export function Faixa({ irPara }: { irPara: (aba: 'conexoes' | 'empresas') => vo
 
   return (
     <header className="faixa" ref={ref}>
-      {aparencia?.empresaId === empresaAtual?.id && aparencia?.logo
-        ? <img className="logo-faixa propria" src={aparencia.logo} alt={empresaAtual?.nome ?? ''} />
+      {aparencia?.logo
+        ? <img className="logo-faixa propria" src={aparencia.logo} alt={aparencia.empresaNome || ''} />
         : <img className="logo-faixa" src={logoPadrao} alt="" />}
       {ehSuper ? (
         <button className="seletor-empresa" onClick={() => setMenu((m) => (m === 'empresa' ? null : 'empresa'))} aria-haspopup="menu" aria-expanded={menu === 'empresa'}>

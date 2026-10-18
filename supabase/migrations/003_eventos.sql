@@ -1,13 +1,14 @@
 -- =====================================================================
--- Gerar Pré-Venda — 003: eventos do sistema (auditoria) e aparência
+-- Gerar Pré-Venda — 003: eventos do sistema (auditoria)
 --
 -- Rode DEPOIS do 002, no SQL Editor (pode rodar mais de uma vez).
 --
 --   * eventos_sistema: quem criou, editou, excluiu, ativou, desativou, salvou...
 --     com dia, hora (com segundos), estação (computador) e usuário.
---     Os registros de conexões, usuários, empresas, aparência e pré-vendas são
+--     Os registros de conexões, usuários, empresas e pré-vendas são
 --     gravados PELO BANCO (gatilhos), sem depender do programa lembrar.
---   * aparencia_empresa: fundo da tela de login e logo de cada empresa.
+--   * A aparência (fundo e logo do login) é guardada só em cada computador:
+--     não há tabela para ela na nuvem.
 -- =====================================================================
 
 -- Nome do computador: o programa manda em todo pedido o cabeçalho x-estacao.
@@ -107,24 +108,8 @@ end $$;
 revoke execute on function public.registrar_evento(text, text, text, jsonb, text, timestamptz, uuid) from public, anon;
 grant execute on function public.registrar_evento(text, text, text, jsonb, text, timestamptz, uuid) to authenticated;
 
--- ---------------------------------------------------------------- aparência
-create table if not exists public.aparencia_empresa (
-  empresa_id uuid primary key references public.empresas (id) on delete cascade,
-  fundo text,          -- imagem (data URL) do fundo da tela de login
-  logo text,           -- imagem (data URL) da logo do cliente
-  atualizado_em timestamptz not null default now(),
-  constraint aparencia_tamanho check (coalesce(length(fundo), 0) <= 4000000 and coalesce(length(logo), 0) <= 1000000)
-);
-alter table public.aparencia_empresa enable row level security;
-
-drop policy if exists "aparência: ver" on public.aparencia_empresa;
-create policy "aparência: ver" on public.aparencia_empresa
-  for select using (public.usuario_liberado() and (public.eh_super() or empresa_id = public.minha_empresa()));
-drop policy if exists "aparência: admin altera" on public.aparencia_empresa;
-create policy "aparência: admin altera" on public.aparencia_empresa
-  for all
-  using (public.eh_super() or (public.eh_admin() and empresa_id = public.minha_empresa()))
-  with check (public.eh_super() or (public.eh_admin() and empresa_id = public.minha_empresa()));
+-- Aparência ficou só no computador: remove a tabela de uma versão de teste do 003
+drop table if exists public.aparencia_empresa;
 
 -- ---------------------------------------------------------------- auditoria automática
 -- Só registra o que um usuário logado fez (ações da Edge Function, que roda
@@ -207,18 +192,6 @@ begin
       return null;
     end if;
 
-  elsif tg_table_name = 'aparencia_empresa' then
-    v_entidade := 'aparência';
-    v_emp := coalesce(new.empresa_id, old.empresa_id);
-    v_acao := case when tg_op = 'DELETE' then 'excluiu' else 'salvou' end;
-    v_desc := case
-      when tg_op = 'DELETE' then 'Fundo e logo removidos'
-      when tg_op = 'INSERT' then 'Fundo e logo da tela de login'
-      else concat_ws(' e ',
-        case when new.fundo is distinct from old.fundo then 'fundo da tela de login' end,
-        case when new.logo is distinct from old.logo then 'logo' end)
-    end;
-
   elsif tg_table_name = 'prevendas_geradas' then
     v_entidade := 'pré-venda';
     v_emp := new.empresa_id;
@@ -247,9 +220,6 @@ create trigger auditar_perfis after update on public.perfis
   for each row execute function public.auditar();
 drop trigger if exists auditar_empresas on public.empresas;
 create trigger auditar_empresas after insert or update or delete on public.empresas
-  for each row execute function public.auditar();
-drop trigger if exists auditar_aparencia on public.aparencia_empresa;
-create trigger auditar_aparencia after insert or update or delete on public.aparencia_empresa
   for each row execute function public.auditar();
 drop trigger if exists auditar_prevendas on public.prevendas_geradas;
 create trigger auditar_prevendas after insert on public.prevendas_geradas

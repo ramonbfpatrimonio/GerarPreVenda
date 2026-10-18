@@ -91,7 +91,6 @@ const novoBackup = (automatico: boolean, diasAtras: number): InfoBackup => {
 }
 const backups: InfoBackup[] = [0, 1, 2, 3, 5].map((d) => novoBackup(true, d))
 let aparenciaLocal: AparenciaLocal | null = null
-const aparenciaNuvem = new Map<string, { fundo: string | null; logo: string | null; atualizado_em: string }>()
 
 let idEvento = 1
 const eventos: Evento[] = []
@@ -373,15 +372,6 @@ function fabricarDemo(quem: () => Perfil | null): Nuvem {
       .filter((e) => (!desde || e.criado_em >= desde) && (!acao || e.acao === acao) && (!entidade || e.entidade === entidade))
       .filter((e) => !t || `${e.descricao} ${e.usuario_nome} ${e.estacao}`.toLowerCase().includes(t))
       .map((e) => ({ ...e, empresas: { nome: empresas.find((x) => x.id === e.empresa_id)?.nome ?? '' } }))
-  },
-  async aparencia(empresaId) {
-    redeOk()
-    return aparenciaNuvem.get(empresaId) ?? null
-  },
-  async salvarAparencia(empresaId, a) {
-    redeOk()
-    aparenciaNuvem.set(empresaId, { ...a, atualizado_em: new Date().toISOString() })
-    registrar(quem(), { acao: 'alterou', entidade: 'aparência', descricao: `Alterou a aparência: ${a.fundo ? 'papel de parede próprio' : 'papel de parede padrão'}, ${a.logo ? 'logo própria' : 'logo padrão'}`, empresa_id: empresaId })
   },
   async backupEmpresa(empresaId) {
     redeOk()
