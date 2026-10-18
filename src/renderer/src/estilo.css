@@ -386,3 +386,4 @@ p { margin: 0; }
 .ajuste-fundo label.marcado { border-color: var(--acao); box-shadow: 0 0 0 1px var(--acao) inset; }
 
 .login .lado-form > * { width: 100%; max-width: 440px; }
+.login .lado-form > .logo-login { width: auto; }
