@@ -40,10 +40,7 @@ export function Pagina_Login() {
       <FundoLogin src={aparencia?.fundo} ajuste={aparencia?.ajuste} rotulo={aparencia?.empresaNome || 'Gerar Pré-Venda'} />
       <form className="lado-form" onSubmit={enviar}>
         <img className="logo-login" src={aparencia?.logo || logoPadrao} alt={aparencia?.empresaNome ?? 'Gerar Pré-Venda'} />
-        <div>
-          <h1>Gerar Pré-Venda</h1>
-          <p className="fraco">{aparencia?.empresaNome ? `Entre para trabalhar em ${aparencia.empresaNome}.` : 'Entre com o seu usuário.'}</p>
-        </div>
+        <h1>Gerar Pré-Venda</h1>
         {(falha || erro) && <Alerta tipo="erro">{falha || erro}</Alerta>}
         <label className="campo"><span>E-mail</span><input className="entrada" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus autoComplete="username" /></label>
         <label className="campo"><span>Senha</span><input className="entrada" type="password" value={senha} onChange={(e) => setSenha(e.target.value)} autoComplete="current-password" /></label>
