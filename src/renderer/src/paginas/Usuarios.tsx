@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react'
 import { nuvem, type Papel, type Perfil } from '../servicos'
 import { useAviso, useSessao } from '../contexto'
 import { Icone } from '../componentes/Icone'
-import { Modal } from '../componentes/Modal'
+import { Alerta, Modal } from '../componentes/Modal'
 
 export function Pagina_Usuarios({ visivel }: { visivel: boolean }) {
-  const { perfil: eu } = useSessao()
+  const { perfil: eu, empresaAtual, ehSuper, internet } = useSessao()
   const avisar = useAviso()
   const [lista, setLista] = useState<Perfil[]>([])
   const [novo, setNovo] = useState(false)
@@ -16,14 +16,16 @@ export function Pagina_Usuarios({ visivel }: { visivel: boolean }) {
 
   const carregar = async () => {
     try {
-      setLista(await nuvem.usuarios())
+      // super_admin vê os usuários da empresa em que está trabalhando (e os outros super admins)
+      const todos = await nuvem.usuarios(ehSuper ? null : empresaAtual?.id)
+      setLista(ehSuper ? todos.filter((u) => u.empresa_id === empresaAtual?.id || u.papel === 'super_admin') : todos)
     } catch (e) {
       avisar((e as Error).message, 'erro')
     }
   }
   useEffect(() => {
-    if (visivel) void carregar()
-  }, [visivel]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (visivel && internet) void carregar()
+  }, [visivel, empresaAtual?.id, internet]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const alterar = async (u: Perfil, d: Partial<Perfil>) => {
     try {
@@ -37,7 +39,7 @@ export function Pagina_Usuarios({ visivel }: { visivel: boolean }) {
   const criar = async () => {
     setSalvando(true)
     try {
-      await nuvem.criarUsuario(dados)
+      await nuvem.criarUsuario({ ...dados, empresa_id: empresaAtual?.id })
       avisar(`Usuário ${dados.nome} criado.`, 'ok')
       setNovo(false)
       setDados({ nome: '', email: '', senha: '', papel: 'operador' })
@@ -69,11 +71,12 @@ export function Pagina_Usuarios({ visivel }: { visivel: boolean }) {
     <div className="pagina">
       <div className="cabecalho-pagina">
         <div>
-          <h1>Usuários</h1>
-          <p className="fraco">O mesmo login vale em todos os computadores. Operadores geram pré-vendas; administradores também cuidam de conexões e usuários.</p>
+          <h1>Usuários de {empresaAtual?.nome ?? 'nenhuma empresa'}</h1>
+          <p className="fraco">O mesmo login vale em todos os computadores da empresa. Operadores geram pré-vendas; administradores também cuidam de conexões e usuários.</p>
         </div>
-        <div className="acoes"><button className="botao primario" onClick={() => setNovo(true)}><Icone nome="mais" /> Novo usuário</button></div>
+        <div className="acoes"><button className="botao primario" onClick={() => setNovo(true)} disabled={!internet || !empresaAtual}><Icone nome="mais" /> Novo usuário</button></div>
       </div>
+      {!internet && <div style={{ marginBottom: 14, maxWidth: 900 }}><Alerta tipo="aviso">Sem internet: a gestão de usuários volta quando a conexão voltar.</Alerta></div>}
       <div className="caixa" style={{ maxWidth: 900 }}>
         <table className="tabela">
           <thead><tr><th>Nome</th><th>E-mail</th><th>Papel</th><th>Situação</th><th></th></tr></thead>
@@ -83,15 +86,19 @@ export function Pagina_Usuarios({ visivel }: { visivel: boolean }) {
                 <td style={{ fontWeight: 600 }}>{u.nome}{u.id === eu?.id && <span className="etiqueta neutra" style={{ marginLeft: 6 }}>você</span>}</td>
                 <td>{u.email}</td>
                 <td>
-                  <select className="entrada" style={{ width: 150, padding: '4px 8px' }} value={u.papel} disabled={u.id === eu?.id} onChange={(e) => void alterar(u, { papel: e.target.value as Papel })}>
-                    <option value="operador">Operador</option>
-                    <option value="admin">Administrador</option>
-                  </select>
+                  {u.papel === 'super_admin' ? (
+                    <span className="etiqueta neutra">Super administrador</span>
+                  ) : (
+                    <select className="entrada" style={{ width: 150, padding: '4px 8px' }} value={u.papel} disabled={u.id === eu?.id} onChange={(e) => void alterar(u, { papel: e.target.value as Papel })}>
+                      <option value="operador">Operador</option>
+                      <option value="admin">Administrador</option>
+                    </select>
+                  )}
                 </td>
                 <td>{u.ativo ? <span className="etiqueta ok">Ativo</span> : <span className="etiqueta erro">Desativado</span>}</td>
                 <td style={{ textAlign: 'right' }}>
-                  <button className="botao leve" onClick={() => setSenhaDe(u)}>Trocar senha</button>
-                  {u.id !== eu?.id && <button className="botao leve" onClick={() => void alterar(u, { ativo: !u.ativo })}>{u.ativo ? 'Desativar' : 'Reativar'}</button>}
+                  {(u.papel !== 'super_admin' || ehSuper) && <button className="botao leve" onClick={() => setSenhaDe(u)}>Trocar senha</button>}
+                  {u.id !== eu?.id && u.papel !== 'super_admin' && <button className="botao leve" onClick={() => void alterar(u, { ativo: !u.ativo })}>{u.ativo ? 'Desativar' : 'Reativar'}</button>}
                 </td>
               </tr>
             ))}
@@ -101,7 +108,7 @@ export function Pagina_Usuarios({ visivel }: { visivel: boolean }) {
 
       <Modal aberto={novo} aoFechar={() => setNovo(false)} rotulo="Novo usuário"
         botoes={<><button className="botao" onClick={() => setNovo(false)}>Cancelar</button><button className="botao primario" disabled={salvando || !dados.nome || !dados.email || dados.senha.length < 6} onClick={() => void criar()}>Criar usuário</button></>}>
-        <h2>Novo usuário</h2>
+        <h2>Novo usuário em {empresaAtual?.nome}</h2>
         <label className="campo"><span>Nome</span><input className="entrada" value={dados.nome} onChange={(e) => setDados({ ...dados, nome: e.target.value })} autoFocus /></label>
         <label className="campo"><span>E-mail</span><input className="entrada" type="email" value={dados.email} onChange={(e) => setDados({ ...dados, email: e.target.value })} /></label>
         <label className="campo"><span>Senha inicial</span><input className="entrada" type="password" value={dados.senha} onChange={(e) => setDados({ ...dados, senha: e.target.value })} /><small>Mínimo de 6 caracteres</small></label>

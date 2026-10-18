@@ -10,7 +10,7 @@ import { join } from 'path'
 import { existsSync } from 'fs'
 import { readFile, writeFile, rename } from 'fs/promises'
 import { randomBytes, randomUUID, scryptSync, createCipheriv, createDecipheriv } from 'crypto'
-import { REGRAS_PADRAO, type PerfilConexao } from '@shared/tipos'
+import { REGRAS_PADRAO, type DadosConexaoNuvem, type PerfilConexao } from '@shared/tipos'
 
 interface PerfilArmazenado extends Omit<PerfilConexao, 'temSenha'> {
   senhaCifrada?: string // base64 (safeStorage)
@@ -32,7 +32,7 @@ async function carregar(): Promise<Arquivo> {
     return cache
   }
   const dados = JSON.parse(await readFile(caminho(), 'utf8')) as Arquivo
-  dados.perfis = (dados.perfis ?? []).map((p) => ({ ...p, regras: { ...REGRAS_PADRAO, ...p.regras } }))
+  dados.perfis = (dados.perfis ?? []).map((p) => ({ ...p, empresaId: p.empresaId ?? '', regras: { ...REGRAS_PADRAO, ...p.regras } }))
   cache = dados
   return cache
 }
@@ -92,6 +92,7 @@ export async function salvarPerfil(perfil: PerfilConexao, senha?: string): Promi
   let armazenado: PerfilArmazenado = {
     ...dados,
     id,
+    empresaId: perfil.empresaId ?? '',
     cliente: perfil.cliente.trim(),
     nome: perfil.nome.trim(),
     servidor: perfil.servidor.trim(),
@@ -109,6 +110,39 @@ export async function salvarPerfil(perfil: PerfilConexao, senha?: string): Promi
   d.perfis = [...d.perfis.filter((x) => x.id !== id), armazenado]
   await gravar(d)
   return publico(armazenado)
+}
+
+/**
+ * Sincroniza com o cadastro da empresa na nuvem: as conexões daquela empresa
+ * passam a ser exatamente as da nuvem, mantendo as senhas já digitadas neste
+ * computador. Também serve de cópia para trabalhar sem internet.
+ */
+export async function sincronizar(empresaId: string, lista: DadosConexaoNuvem[]): Promise<void> {
+  if (!empresaId) return
+  const d = await carregar()
+  const anteriores = new Map(d.perfis.map((p) => [p.id, p]))
+  const daNuvem: PerfilArmazenado[] = lista.map((dados) => {
+    const antes = anteriores.get(dados.id)
+    return {
+      ...dados,
+      empresaId,
+      regras: { ...REGRAS_PADRAO, ...dados.regras },
+      atualizadoEm: new Date().toISOString(),
+      senhaCifrada: antes?.senhaCifrada,
+      senhaTextoBase64: antes?.senhaTextoBase64
+    }
+  })
+  const ids = new Set(daNuvem.map((p) => p.id))
+  d.perfis = [...d.perfis.filter((p) => p.empresaId !== empresaId && !ids.has(p.id)), ...daNuvem]
+  await gravar(d)
+}
+
+/** Grava só a senha deste computador para uma conexão já existente. */
+export async function salvarSenha(id: string, senha: string): Promise<PerfilConexao> {
+  const d = await carregar()
+  const p = d.perfis.find((x) => x.id === id)
+  if (!p) throw new Error('Conexão não encontrada neste computador.')
+  return salvarPerfil(publico(p), senha)
 }
 
 export async function excluirPerfil(id: string): Promise<void> {

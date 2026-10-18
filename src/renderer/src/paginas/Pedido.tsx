@@ -67,7 +67,7 @@ const NOMES_FILTRO: Record<FiltroST, string> = { TODOS: 'todos os itens', ST: 's
 // ----------------------------------------------------------------- página
 export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
   const { ativa, status, perfis, selecionar } = useConexoes()
-  const { perfil } = useSessao()
+  const { perfil, empresaAtual, registrarNoHistorico, internet } = useSessao()
   const avisar = useAviso()
 
   const [arquivo, setArquivo] = useState<ResultadoPdf | null>(null)
@@ -260,7 +260,9 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
 
   const bloqueio = (() => {
     if (!est) return 'Abra um pedido.'
+    if (!empresaAtual) return 'Escolha a empresa na faixa superior.'
     if (!ativa) return 'Selecione uma conexão na faixa superior.'
+    if (status.estado === 'sem-senha') return 'Informe a senha do SQL deste computador na aba Conexões.'
     if (status.estado !== 'on') return 'Sem conexão com o banco.'
     if (resumo.pendentes > 0 || buscando) return 'Aguardando a busca dos produtos.'
     if (resumo.naoEncontrados > 0) return `${resumo.naoEncontrados} produto(s) não localizado(s) no ERP: corrija ou remova antes de gerar.`
@@ -283,7 +285,7 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
     setConfirmar(filtro)
     const [erp, hist] = await Promise.all([
       window.api.erp.verificarPedido(ativa.id, cliente.dado.codigo, est.pedidoCompra.trim()).catch(() => []),
-      nuvem.jaGeradoNoHistorico(ativa.cliente, cnpj14(est.cnpj), est.pedidoCompra.trim()).catch(() => [])
+      internet ? nuvem.jaGeradoNoHistorico(empresaAtual?.id ?? null, cnpj14(est.cnpj), est.pedidoCompra.trim()).catch(() => []) : Promise.resolve([])
     ])
     setExistentes({ erp, nuvem: hist })
   }
@@ -301,7 +303,8 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
       const r = await window.api.erp.gerar(ativa.id, { cnpj: est.cnpj, pedidoCompra: est.pedidoCompra.trim(), filtro, itens, usuario: perfil.nome })
       let avisoHistorico: string | undefined
       try {
-        await nuvem.registrarPreVenda({
+        const destino = await registrarNoHistorico({
+          empresa_id: empresaAtual?.id,
           usuario_nome: perfil.nome,
           estacao: await window.api.sistema.estacao(),
           conexao_cliente: ativa.cliente,
@@ -319,6 +322,7 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
           total_com_st: r.totalComST,
           arquivo_pdf: est.arquivo
         })
+        if (destino === 'na-fila') avisoHistorico = 'Sem internet: a pré-venda foi criada no ERP e entra no histórico da nuvem assim que a conexão voltar.'
       } catch (e) {
         avisoHistorico = `A pré-venda foi criada no ERP, mas não entrou no histórico da nuvem: ${(e as Error).message}`
       }

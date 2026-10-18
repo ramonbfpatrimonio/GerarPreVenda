@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { PerfilConexao } from '@shared/tipos'
-import { nuvem, type Perfil } from './servicos'
+import { ehErroDeRede, nuvem, type Empresa, type Perfil, type RegistroHistorico } from './servicos'
 
 // ----------------------------------------------------------------- avisos
 type TipoAviso = 'info' | 'ok' | 'erro'
@@ -28,76 +28,283 @@ export function AvisosProvider({ children }: { children: ReactNode }) {
   )
 }
 
-// ----------------------------------------------------------------- sessão
+// ----------------------------------------------------------------- sessão, empresa, internet e fila
+export interface EmpresaAtual { id: string; nome: string }
+
 interface Sessao {
   perfil: Perfil | null
+  offline: boolean // entrou sem internet (com o acesso guardado neste computador)
+  internet: boolean
   carregando: boolean
   erro: string
+  // empresa em que se está trabalhando (super_admin escolhe; os demais têm a sua)
+  empresaAtual: EmpresaAtual | null
+  empresas: Empresa[]
+  escolherEmpresa(id: string): void
+  recarregarEmpresas(): Promise<void>
+  // fila do histórico (pré-vendas geradas sem internet)
+  pendentes: number
+  registrarNoHistorico(r: RegistroHistorico): Promise<'enviado' | 'na-fila'>
   entrar(email: string, senha: string): Promise<void>
   sair(): Promise<void>
+  ehSuper: boolean
+  ehAdmin: boolean
 }
 const SessaoCtx = createContext<Sessao>(null as unknown as Sessao)
 export const useSessao = () => useContext(SessaoCtx)
 
+const CHAVE_EMPRESA = 'empresaAtual'
+const lerLocal = (k: string) => {
+  try {
+    return localStorage.getItem(k) ?? ''
+  } catch {
+    return ''
+  }
+}
+const gravarLocal = (k: string, v: string) => {
+  try {
+    localStorage.setItem(k, v)
+  } catch {
+    /* sem armazenamento: só não lembra */
+  }
+}
+
 export function SessaoProvider({ children }: { children: ReactNode }) {
   const [perfil, setPerfil] = useState<Perfil | null>(null)
+  const [offline, setOffline] = useState(false)
+  const [internet, setInternet] = useState(true)
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
+  const [empresas, setEmpresas] = useState<Empresa[]>([])
+  const [empresaEscolhida, setEmpresaEscolhida] = useState(lerLocal(CHAVE_EMPRESA))
+  const [pendentes, setPendentes] = useState(0)
+  const enviando = useRef(false)
+  const avisar = useAviso()
+
+  /** Bloqueios que valem online: usuário desativado ou empresa suspensa. */
+  const validar = useCallback(async (p: Perfil | null): Promise<Perfil | null> => {
+    if (!p) return null
+    let motivo = ''
+    if (!p.ativo) motivo = 'Seu usuário está desativado. Fale com o administrador.'
+    else if (p.papel !== 'super_admin' && !p.empresa_id) motivo = 'Seu usuário não está ligado a nenhuma empresa. Fale com o administrador.'
+    else if (p.papel !== 'super_admin' && !p.empresa_ativa) motivo = 'Acesso da empresa suspenso. Fale com o suporte.'
+    if (motivo) {
+      await window.api.offline.esquecer(p.email).catch(() => undefined)
+      await nuvem.sair()
+      setErro(motivo)
+      return null
+    }
+    await window.api.offline.atualizarPerfil(p).catch(() => undefined)
+    return p
+  }, [])
 
   const carregarPerfil = useCallback(async () => {
     try {
-      const p = await nuvem.meuPerfil()
-      if (p && !p.ativo) {
-        await nuvem.sair()
-        setErro('Seu usuário está desativado. Fale com o administrador.')
-        setPerfil(null)
-      } else setPerfil(p)
+      setPerfil(await validar(await nuvem.meuPerfil()))
+      setOffline(false)
     } catch (e) {
-      setErro((e as Error).message)
-      setPerfil(null)
+      if (ehErroDeRede(e)) {
+        // Sessão salva + sem internet: segue com o perfil guardado (se ainda no prazo)
+        const id = await nuvem.usuarioAtualId().catch(() => null)
+        const guardado = id ? await window.api.offline.perfilPorId(id).catch(() => null) : null
+        if (guardado) {
+          setPerfil(guardado as Perfil)
+          setOffline(true)
+          setInternet(false)
+        } else setPerfil(null)
+      } else {
+        setErro((e as Error).message)
+        setPerfil(null)
+      }
     } finally {
       setCarregando(false)
     }
-  }, [])
+  }, [validar])
 
   useEffect(() => {
-    if (!nuvem.configurada) {
-      setCarregando(false)
-      return
-    }
     void carregarPerfil()
     return nuvem.aoMudarSessao((logado) => {
-      if (!logado) setPerfil(null)
+      if (!logado) setPerfil((p) => (offline ? p : null))
     })
-  }, [carregarPerfil])
+  }, [carregarPerfil]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ---- internet: eventos do sistema + teste periódico
+  useEffect(() => {
+    let vivo = true
+    const testar = async () => {
+      const ok = navigator.onLine && (await nuvem.online())
+      if (vivo) setInternet(ok)
+    }
+    void testar()
+    const t = setInterval(testar, 30_000)
+    const on = () => void testar()
+    const off = () => setInternet(false)
+    window.addEventListener('online', on)
+    window.addEventListener('offline', off)
+    return () => {
+      vivo = false
+      clearInterval(t)
+      window.removeEventListener('online', on)
+      window.removeEventListener('offline', off)
+    }
+  }, [])
+
+  // ---- fila do histórico
+  const atualizarPendentes = useCallback(async () => {
+    setPendentes((await window.api.fila.listar().catch(() => [])).length)
+  }, [])
+
+  const esvaziarFila = useCallback(async () => {
+    if (enviando.current) return
+    enviando.current = true
+    try {
+      const fila = await window.api.fila.listar()
+      if (!fila.length) return
+      if (!(await nuvem.usuarioAtualId())) return // entrou offline sem sessão: envia no próximo login online
+      const enviados: string[] = []
+      for (const r of fila) {
+        try {
+          await nuvem.registrarPreVenda(r as unknown as RegistroHistorico)
+          enviados.push(r.chave_local)
+        } catch (e) {
+          if (ehErroDeRede(e)) break
+        }
+      }
+      if (enviados.length) {
+        await window.api.fila.remover(enviados)
+        avisar(`${enviados.length} pré-venda(s) gerada(s) sem internet entraram no histórico.`, 'ok')
+      }
+    } finally {
+      enviando.current = false
+      void atualizarPendentes()
+    }
+  }, [avisar, atualizarPendentes])
+
+  useEffect(() => {
+    void atualizarPendentes()
+  }, [atualizarPendentes])
+
+  // Internet voltou: confirma o perfil (bloqueios), sai do modo offline e envia a fila
+  useEffect(() => {
+    if (!perfil || !internet) return
+    if (offline) {
+      void (async () => {
+        if (await nuvem.usuarioAtualId()) {
+          await carregarPerfil()
+          void esvaziarFila()
+        }
+      })()
+    } else void esvaziarFila()
+  }, [internet, perfil?.id, offline]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const registrarNoHistorico = useCallback(
+    async (r: RegistroHistorico): Promise<'enviado' | 'na-fila'> => {
+      const registro = { ...r, chave_local: r.chave_local ?? crypto.randomUUID(), criado_em: r.criado_em ?? new Date().toISOString() }
+      try {
+        if (!internet || offline) throw new Error('Sem conexão com a internet.')
+        await nuvem.registrarPreVenda(registro)
+        return 'enviado'
+      } catch (e) {
+        if (!ehErroDeRede(e)) throw e
+        await window.api.fila.adicionar(registro as unknown as Record<string, unknown> & { chave_local: string })
+        void atualizarPendentes()
+        return 'na-fila'
+      }
+    },
+    [internet, offline, atualizarPendentes]
+  )
+
+  // ---- empresas
+  const ehSuper = perfil?.papel === 'super_admin'
+  const recarregarEmpresas = useCallback(async () => {
+    if (!ehSuper || offline) return
+    try {
+      setEmpresas(await nuvem.empresas())
+    } catch (e) {
+      if (!ehErroDeRede(e)) avisar((e as Error).message, 'erro')
+    }
+  }, [ehSuper, offline, avisar])
+  useEffect(() => {
+    void recarregarEmpresas()
+  }, [recarregarEmpresas])
+
+  const empresaAtual: EmpresaAtual | null = useMemo(() => {
+    if (!perfil) return null
+    if (!ehSuper) return perfil.empresa_id ? { id: perfil.empresa_id, nome: perfil.empresa_nome } : null
+    const e = empresas.find((x) => x.id === empresaEscolhida) ?? empresas[0]
+    if (e) return { id: e.id, nome: e.nome }
+    // offline: lembra a última escolhida
+    return empresaEscolhida ? { id: empresaEscolhida, nome: lerLocal(CHAVE_EMPRESA + ':nome') || 'Empresa' } : null
+  }, [perfil, ehSuper, empresas, empresaEscolhida])
+
+  const escolherEmpresa = useCallback(
+    (id: string) => {
+      setEmpresaEscolhida(id)
+      gravarLocal(CHAVE_EMPRESA, id)
+      const e = empresas.find((x) => x.id === id)
+      if (e) gravarLocal(CHAVE_EMPRESA + ':nome', e.nome)
+    },
+    [empresas]
+  )
 
   const valor = useMemo<Sessao>(
     () => ({
       perfil,
+      offline,
+      internet: internet && !offline,
       carregando,
       erro,
+      empresaAtual,
+      empresas,
+      escolherEmpresa,
+      recarregarEmpresas,
+      pendentes,
+      registrarNoHistorico,
+      ehSuper,
+      ehAdmin: ehSuper || perfil?.papel === 'admin',
       async entrar(email, senha) {
         setErro('')
-        await nuvem.entrar(email, senha)
-        await carregarPerfil()
+        try {
+          await nuvem.entrar(email, senha)
+        } catch (e) {
+          if (!ehErroDeRede(e)) throw e
+          // Sem internet: tenta o acesso guardado neste computador
+          const p = (await window.api.offline.entrar(email, senha)) as Perfil
+          setPerfil(p)
+          setOffline(true)
+          setInternet(false)
+          return
+        }
+        const p = await validar(await nuvem.meuPerfil())
+        if (p) await window.api.offline.lembrar(email, senha, p).catch(() => undefined)
+        setPerfil(p)
+        setOffline(false)
       },
       async sair() {
         await nuvem.sair()
         setPerfil(null)
+        setOffline(false)
       }
     }),
-    [perfil, carregando, erro, carregarPerfil]
+    [perfil, offline, internet, carregando, erro, empresaAtual, empresas, escolherEmpresa, recarregarEmpresas, pendentes, registrarNoHistorico, ehSuper, validar]
   )
   return <SessaoCtx.Provider value={valor}>{children}</SessaoCtx.Provider>
 }
 
-// ----------------------------------------------------------------- conexão ativa
-export type EstadoConexao = { estado: 'nenhuma' } | { estado: 'verificando' } | { estado: 'on'; driver: string } | { estado: 'off'; erro: string }
+// ----------------------------------------------------------------- conexões da empresa
+export type EstadoConexao =
+  | { estado: 'nenhuma' }
+  | { estado: 'verificando' }
+  | { estado: 'on'; driver: string }
+  | { estado: 'off'; erro: string }
+  | { estado: 'sem-senha' }
 
 interface Conexoes {
-  perfis: PerfilConexao[]
+  perfis: PerfilConexao[] // conexões da empresa atual (cópia local com as senhas deste PC)
+  locais: PerfilConexao[] // conexões antigas, só deste computador (sem empresa)
   ativa: PerfilConexao | null
   status: EstadoConexao
+  sincronizadoComNuvem: boolean
   selecionar(id: string): void
   recarregar(): Promise<void>
   verificar(): void
@@ -105,38 +312,53 @@ interface Conexoes {
 const ConexoesCtx = createContext<Conexoes>(null as unknown as Conexoes)
 export const useConexoes = () => useContext(ConexoesCtx)
 
-const CHAVE_ATIVA = 'conexaoAtiva'
-function lerAtiva(): string {
-  try {
-    return localStorage.getItem(CHAVE_ATIVA) ?? ''
-  } catch {
-    return ''
-  }
-}
-
 export function ConexoesProvider({ children }: { children: ReactNode }) {
-  const [perfis, setPerfis] = useState<PerfilConexao[]>([])
-  const [ativaId, setAtivaId] = useState<string>(lerAtiva)
+  const { empresaAtual, internet } = useSessao()
+  const [todas, setTodas] = useState<PerfilConexao[]>([])
+  const [sincronizado, setSincronizado] = useState(false)
+  const chaveAtiva = `conexaoAtiva:${empresaAtual?.id ?? ''}`
+  const [ativaId, setAtivaId] = useState<string>(() => lerLocal(chaveAtiva))
   const [status, setStatus] = useState<EstadoConexao>({ estado: 'nenhuma' })
-  const aviso = useAviso()
+  const avisar = useAviso()
+
+  useEffect(() => setAtivaId(lerLocal(chaveAtiva)), [chaveAtiva])
 
   const recarregar = useCallback(async () => {
+    if (empresaAtual && internet) {
+      try {
+        const daNuvem = await nuvem.conexoes(empresaAtual.id)
+        await window.api.conexoes.sincronizar(
+          empresaAtual.id,
+          daNuvem.map((c) => ({ ...c.dados, id: c.id, empresaId: empresaAtual.id }))
+        )
+        setSincronizado(true)
+      } catch (e) {
+        setSincronizado(false)
+        if (!ehErroDeRede(e)) avisar(`Não foi possível ler as conexões da empresa: ${(e as Error).message}`, 'erro')
+      }
+    } else setSincronizado(false)
     try {
-      setPerfis(await window.api.conexoes.listar())
+      setTodas(await window.api.conexoes.listar())
     } catch (e) {
-      aviso((e as Error).message, 'erro')
+      avisar((e as Error).message, 'erro')
     }
-  }, [aviso])
+  }, [empresaAtual?.id, internet, avisar]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     void recarregar()
   }, [recarregar])
 
+  const perfis = useMemo(() => todas.filter((p) => empresaAtual && p.empresaId === empresaAtual.id), [todas, empresaAtual])
+  const locais = useMemo(() => todas.filter((p) => !p.empresaId), [todas])
   const ativa = perfis.find((p) => p.id === ativaId) ?? null
 
   const verificar = useCallback(() => {
     if (!ativa) {
       setStatus({ estado: 'nenhuma' })
+      return
+    }
+    if (ativa.autenticacao === 'sql' && !ativa.temSenha) {
+      setStatus({ estado: 'sem-senha' })
       return
     }
     setStatus({ estado: 'verificando' })
@@ -156,15 +378,17 @@ export function ConexoesProvider({ children }: { children: ReactNode }) {
     document.documentElement.style.setProperty('--banco', ativa?.cor ?? '#5a6472')
   }, [ativa?.cor])
 
-  const selecionar = useCallback((id: string) => {
-    setAtivaId(id)
-    try {
-      localStorage.setItem(CHAVE_ATIVA, id)
-    } catch {
-      /* sem armazenamento: só não lembra na próxima vez */
-    }
-  }, [])
+  const selecionar = useCallback(
+    (id: string) => {
+      setAtivaId(id)
+      gravarLocal(chaveAtiva, id)
+    },
+    [chaveAtiva]
+  )
 
-  const valor = useMemo(() => ({ perfis, ativa, status, selecionar, recarregar, verificar }), [perfis, ativa, status, selecionar, recarregar, verificar])
+  const valor = useMemo(
+    () => ({ perfis, locais, ativa, status, sincronizadoComNuvem: sincronizado, selecionar, recarregar, verificar }),
+    [perfis, locais, ativa, status, sincronizado, selecionar, recarregar, verificar]
+  )
   return <ConexoesCtx.Provider value={valor}>{children}</ConexoesCtx.Provider>
 }

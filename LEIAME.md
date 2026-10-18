@@ -6,34 +6,75 @@ de cada cliente (SQL Server) e grava a pré-venda — tudo numa única transaç�
 
 - **Conexões por cliente**: cada cliente tem o seu banco (local ou na rede) e as suas regras.
   A faixa superior fica na cor da conexão ativa, para ninguém gerar no banco errado.
-- **Login centralizado no Supabase**: o mesmo usuário em qualquer computador; papéis *admin* e *operador*.
+- **Várias empresas no mesmo Supabase**: cada empresa só vê os próprios usuários, conexões e histórico; você (super administrador) gerencia todas.
+- **Funciona sem internet**: login offline por 7 dias e fila do histórico.
 - **Histórico central**: toda pré-venda gerada fica registrada na nuvem e o programa avisa
   quando o mesmo pedido de compra já foi lançado (no ERP ou por outro computador).
 - **Atualização automática**: publique uma versão e todos os computadores atualizam sozinhos.
 
 ---
 
-## 1. Supabase (uma vez)
+## 1. Supabase
 
+### Projeto novo (uma vez)
 1. Crie um projeto em <https://supabase.com>.
-2. **SQL Editor** → cole e rode `supabase/migrations/001_inicial.sql`.
-3. **Edge Function** (criar usuários e trocar senhas pelo programa):
-   ```bash
-   npx supabase login
-   npx supabase link --project-ref SEU-PROJETO
-   npx supabase functions deploy admin-usuarios
-   ```
-4. **Authentication → Providers → Email**: desligue *Allow new users to sign up*
-   (só o administrador cria usuários).
-5. **Authentication → Users → Add user**: crie o seu usuário (marque *Auto Confirm*).
-6. No SQL Editor, torne-se administrador:
+2. **SQL Editor** → rode `supabase/migrations/001_inicial.sql` e depois `supabase/migrations/002_empresas.sql`.
+3. **Database → Extensions** → habilite **pg_cron** e rode o `002_empresas.sql` de novo (agenda a limpeza automática do histórico).
+4. **Edge Functions → Deploy a new function → Via Editor**: nome `admin-usuarios`, cole `supabase/functions/admin-usuarios/index.ts`, **Deploy**.
+5. **Authentication → Sign In / Providers → Email**: desligue *Allow new users to sign up*.
+6. **Authentication → Users → Add user** (marque *Auto Confirm*) e, no SQL Editor:
    ```sql
-   update public.perfis set papel = 'admin', nome = 'Ramon' where email = 'seu-email@exemplo.com';
+   update public.perfis set papel = 'super_admin', nome = 'Ramon' where email = 'seu-email@exemplo.com';
    ```
-7. Copie `.env.example` para `.env` e preencha `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`
-   (*Project Settings → API*). A chave *anon* é pública por natureza; quem protege os dados são as políticas RLS.
 
-Os demais usuários você cria pela aba **Usuários** do próprio programa.
+### Projeto que já estava rodando a versão 1.0 (atualização para várias empresas)
+1. **SQL Editor** → rode `supabase/migrations/002_empresas.sql`. Ele:
+   - cria a empresa **Hage** e coloca nela todos os usuários e o histórico que já existem;
+   - transforma o primeiro administrador (você) em **super administrador**.
+2. Habilite **pg_cron** (Database → Extensions) e rode o `002` mais uma vez.
+3. **Edge Functions → admin-usuarios**: substitua o código pelo novo `index.ts` e clique em **Deploy**.
+4. Instale a versão 1.1 do programa. Entre como super administrador, abra **Conexões** e clique em
+   **Enviar para Hage** para subir as conexões que estavam só no seu computador.
+
+O endereço e a chave *anon* do Supabase já estão em `src/renderer/src/servicos/nuvem.ts`
+(um `.env` com `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` tem prioridade, se existir).
+A chave *anon* é pública por natureza; quem protege os dados são as regras RLS do banco.
+
+---
+
+## Empresas, papéis e o que cada um vê
+
+| Papel | Vê e faz |
+|---|---|
+| **Super administrador** (você) | Todas as empresas: cria e bloqueia empresas, escolhe em qual empresa trabalhar na faixa do topo, vê o histórico de todas |
+| **Administrador da empresa** | Só a própria empresa: cria operadores, cadastra conexões |
+| **Operador** | Gera pré-vendas e vê o histórico da própria empresa; informa a senha do SQL no próprio computador |
+
+A separação é feita **pelo banco** (RLS), não só pela tela: mesmo com o programa modificado, uma empresa
+não lê nem grava dados de outra. Os testes estão em `tests/sql/` (rodam num PostgreSQL comum:
+`PGHOST=... PGUSER=postgres sh tests/sql/rodar.sh`).
+
+**Cliente novo:** Empresas → **Nova empresa** (nome, CNPJ e o administrador) → instale o programa nos PCs do
+cliente → o administrador dele entra, cadastra a conexão do ERP e cria os operadores.
+
+**Conexões:** o cadastro (servidor, banco, cor, regras) fica na empresa e aparece em todos os computadores dela.
+A **senha do SQL nunca vai para a nuvem**: cada computador informa uma vez e ela fica cifrada pelo Windows.
+
+**Histórico:** guardado por 24 meses (ajustável por empresa em Empresas → Editar), apagado sozinho depois disso
+pelo pg_cron. A pré-venda continua no ERP; sai só o registro da nuvem. Use **Exportar para Excel** se quiser guardar.
+
+## Sem internet (modo offline)
+
+- Quem já entrou naquele computador com internet consegue entrar sem internet por **7 dias** a partir do último
+  acesso online (a verificação da senha fica cifrada no computador; a senha em si não é guardada).
+- Gerar pré-venda funciona normalmente (o ERP está na rede local). O registro do histórico fica numa fila e é
+  enviado sozinho quando a internet volta. A faixa do topo mostra **Sem internet** e quantos aguardam envio.
+- Sem internet não dá para criar usuários, empresas ou alterar o cadastro de conexões.
+- Usuário desativado ou empresa bloqueada perde o acesso offline no próximo contato com a internet.
+
+### Limites do plano gratuito do Supabase
+O programa grava menos de 1 KB por pré-venda (só o resumo). O plano gratuito pausa o projeto após 7 dias
+sem nenhum uso e não tem backup automático; com vários clientes, considere o plano Pro.
 
 ---
 
@@ -43,6 +84,7 @@ Os demais usuários você cria pela aba **Usuários** do próprio programa.
 npm install
 npm run dev        # abre o programa em modo desenvolvimento
 npm test           # testes (leitor do PDF real + regras da planilha)
+sh tests/sql/rodar.sh  # testes de isolamento entre empresas (precisa de um PostgreSQL)
 npm run typecheck
 npm run demo       # só as telas, com dados simulados: http://localhost:5199/?logado
 ```

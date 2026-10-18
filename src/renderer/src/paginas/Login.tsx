@@ -28,7 +28,7 @@ export function Pagina_Login() {
       <form className="lado-form" onSubmit={enviar}>
         <div>
           <h1>Gerar Pré-Venda</h1>
-          <p className="fraco">Entre com o seu usuário. O mesmo login funciona em qualquer computador.</p>
+          <p className="fraco">Entre com o seu usuário. Sem internet, quem já entrou neste computador nos últimos 7 dias consegue entrar mesmo assim.</p>
         </div>
         {!nuvem.configurada && (
           <Alerta tipo="erro">Este programa foi gerado sem o endereço do Supabase. Configure o arquivo .env (veja o LEIAME) e gere o instalador de novo.</Alerta>
@@ -41,8 +41,8 @@ export function Pagina_Login() {
         </button>
       </form>
       <div className="lado-info">
-        <h2 style={{ color: 'var(--tinta)' }}>Um programa, o banco de cada cliente</h2>
-        <p>Cada cliente tem a sua conexão e a sua cor. A faixa no topo da tela mostra o tempo todo em qual banco a pré-venda vai ser gravada.</p>
+        <h2 style={{ color: 'var(--tinta)' }}>Cada empresa com os seus dados</h2>
+        <p>Usuários, conexões e histórico ficam separados por empresa. A faixa no topo mostra o tempo todo a empresa e o banco em que a pré-venda vai ser gravada.</p>
         <div className="faixas" aria-hidden="true">
           <div className="faixa-exemplo" style={{ background: '#1f5f9e' }}>Hage › COMERCIO</div>
           <div className="faixa-exemplo" style={{ background: '#7a3fb5' }}>Hage › INDUSTRIA</div>

@@ -1,25 +1,25 @@
 import { useEffect, useState } from 'react'
-import { REGRAS_PADRAO, type PerfilConexao, type ResultadoTeste } from '@shared/tipos'
+import { REGRAS_PADRAO, type DadosConexaoNuvem, type PerfilConexao, type ResultadoTeste } from '@shared/tipos'
 import { formatarCnpj, soDigitos } from '@shared/numeros'
 import { useAviso, useConexoes, useSessao } from '../contexto'
+import { nuvem } from '../servicos'
 import { Icone } from '../componentes/Icone'
 import { Alerta, Modal } from '../componentes/Modal'
 
 const CORES = ['#1f5f9e', '#0e7c5a', '#7a3fb5', '#b4461b', '#a3122a', '#8a6100', '#0f6470', '#3d4a5c', '#b0306a', '#4b6b12']
 
-const vazio = (): PerfilConexao => ({
-  id: '', cliente: '', nome: '', cor: CORES[0], servidor: '', instancia: '', porta: null, autenticacao: 'sql',
+const vazio = (empresaId = ''): PerfilConexao => ({
+  id: '', empresaId, cliente: '', nome: '', cor: CORES[0], servidor: '', instancia: '', porta: null, autenticacao: 'sql',
   usuario: 'sa', temSenha: false, banco: '', driver: 'auto', criptografar: false, cnpjsEmpresa: [],
   regras: { ...REGRAS_PADRAO }, atualizadoEm: ''
 })
 
 export function Pagina_Conexoes() {
-  const { perfis, recarregar, ativa, selecionar } = useConexoes()
-  const { perfil: usuario } = useSessao()
+  const { perfis, locais, recarregar, ativa, selecionar, sincronizadoComNuvem } = useConexoes()
+  const { ehAdmin: admin, empresaAtual, internet } = useSessao()
   const avisar = useAviso()
-  const admin = usuario?.papel === 'admin'
 
-  const [form, setForm] = useState<PerfilConexao>(perfis[0] ?? vazio())
+  const [form, setForm] = useState<PerfilConexao>(perfis[0] ?? vazio(empresaAtual?.id))
   const [senha, setSenha] = useState('')
   const [teste, setTeste] = useState<ResultadoTeste | null>(null)
   const [testando, setTestando] = useState(false)
@@ -34,7 +34,14 @@ export function Pagina_Conexoes() {
   }, [])
   useEffect(() => {
     if (!form.id && perfis.length && !form.cliente) setForm(perfis[0])
+    // conexão aberta foi atualizada pela sincronização: recarrega o formulário
+    const atual = perfis.find((p) => p.id === form.id)
+    if (atual && atual.temSenha !== form.temSenha) setForm((f) => ({ ...f, temSenha: atual.temSenha }))
   }, [perfis]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    setForm(perfis[0] ?? vazio(empresaAtual?.id))
+    setTeste(null)
+  }, [empresaAtual?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const abrir = (p: PerfilConexao) => {
     setForm(p)
@@ -61,16 +68,30 @@ export function Pagina_Conexoes() {
 
   const faltando = !form.cliente.trim() ? 'o nome do cliente' : !form.nome.trim() ? 'o nome da conexão' : !form.servidor.trim() ? 'o servidor' : ''
 
-  const salvar = async () => {
-    if (faltando) return avisar(`Preencha ${faltando}.`, 'erro')
+  const paraNuvem = (p: PerfilConexao): DadosConexaoNuvem => {
+    const { temSenha: _t, atualizadoEm: _a, ...dados } = p
+    return dados
+  }
+
+  /** Salva o cadastro na empresa (todos os PCs) e a senha só neste computador. */
+  const salvar = async (p: PerfilConexao = form) => {
+    if (!empresaAtual) return avisar('Escolha a empresa antes de cadastrar conexões.', 'erro')
+    if (!internet) return avisar('Sem internet: o cadastro de conexões é salvo na empresa e precisa de conexão.', 'erro')
+    if (!p.cliente.trim() || !p.nome.trim() || !p.servidor.trim()) return avisar(`Preencha ${faltando || 'os dados da conexão'}.`, 'erro')
     setSalvando(true)
     try {
-      const salvo = await window.api.conexoes.salvar(form, senha ? senha : undefined)
+      const salvo = await window.api.conexoes.salvar({ ...p, empresaId: empresaAtual.id }, p === form && senha ? senha : undefined)
+      try {
+        await nuvem.salvarConexao(empresaAtual.id, paraNuvem(salvo))
+      } catch (e) {
+        await window.api.conexoes.excluir(salvo.id).catch(() => undefined)
+        throw new Error(`A conexão não foi salva na empresa: ${(e as Error).message}`)
+      }
       await recarregar()
       setForm(salvo)
       setSenha('')
       if (!ativa) selecionar(salvo.id)
-      avisar(`Conexão ${salvo.cliente} › ${salvo.nome} salva.`, 'ok')
+      avisar(`Conexão ${salvo.cliente} › ${salvo.nome} salva para todos os computadores de ${empresaAtual.nome}.`, 'ok')
     } catch (e) {
       avisar((e as Error).message, 'erro')
     } finally {
@@ -78,12 +99,29 @@ export function Pagina_Conexoes() {
     }
   }
 
+  const salvarSoSenha = async () => {
+    if (!form.id) return
+    try {
+      await window.api.conexoes.salvarSenha(form.id, senha)
+      setSenha('')
+      await recarregar()
+      avisar('Senha guardada neste computador.', 'ok')
+    } catch (e) {
+      avisar((e as Error).message, 'erro')
+    }
+  }
+
   const excluir = async () => {
-    if (!form.id || !confirm(`Excluir a conexão ${form.cliente} › ${form.nome} deste computador?`)) return
-    await window.api.conexoes.excluir(form.id)
-    await recarregar()
-    setForm(vazio())
-    avisar('Conexão excluída.', 'ok')
+    if (!form.id || !confirm(`Excluir a conexão ${form.cliente} › ${form.nome} de todos os computadores de ${empresaAtual?.nome}?`)) return
+    try {
+      await nuvem.excluirConexao(form.id)
+      await window.api.conexoes.excluir(form.id)
+      await recarregar()
+      setForm(vazio(empresaAtual?.id))
+      avisar('Conexão excluída.', 'ok')
+    } catch (e) {
+      avisar((e as Error).message, 'erro')
+    }
   }
 
   const executarArquivo = async () => {
@@ -109,19 +147,27 @@ export function Pagina_Conexoes() {
     <div className="pagina">
       <div className="cabecalho-pagina">
         <div>
-          <h1>Conexões</h1>
-          <p className="fraco">Bancos do ERP de cada cliente. As senhas ficam guardadas só neste computador, protegidas pelo Windows.</p>
+          <h1>Conexões de {empresaAtual?.nome ?? '—'}</h1>
+          <p className="fraco">O cadastro vale para todos os computadores da empresa. A senha do SQL fica só neste computador, protegida pelo Windows.</p>
         </div>
         {admin && (
           <div className="acoes">
             <button className="botao" onClick={() => setArquivo('importar')}><Icone nome="importar" /> Importar</button>
             <button className="botao" onClick={() => setArquivo('exportar')} disabled={!perfis.length}><Icone nome="exportar" /> Exportar</button>
-            <button className="botao primario" onClick={() => abrir(vazio())}><Icone nome="mais" /> Nova conexão</button>
+            <button className="botao primario" onClick={() => abrir(vazio(empresaAtual?.id))} disabled={!empresaAtual}><Icone nome="mais" /> Nova conexão</button>
           </div>
         )}
       </div>
 
-      {!admin && <div style={{ marginBottom: 14 }}><Alerta tipo="aviso">Somente administradores podem criar ou alterar conexões. Você pode escolher a conexão na faixa superior.</Alerta></div>}
+      {!admin && <div style={{ marginBottom: 14 }}><Alerta tipo="aviso">Somente administradores alteram o cadastro das conexões. Você pode escolher a conexão na faixa superior e informar a senha do SQL deste computador.</Alerta></div>}
+      {!sincronizadoComNuvem && <div style={{ marginBottom: 14 }}><Alerta tipo="aviso">Sem internet: mostrando a cópia das conexões guardada neste computador.</Alerta></div>}
+      {admin && locais.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <Alerta tipo="aviso" acoes={<button className="botao" disabled={!internet || salvando} onClick={async () => { for (const p of locais) await salvar({ ...p, empresaId: empresaAtual?.id ?? '' }) }}>Enviar para {empresaAtual?.nome}</button>}>
+            Há {locais.length} conexão(ões) antiga(s) só neste computador ({locais.map((p) => `${p.cliente} › ${p.nome}`).join(', ')}). Envie para a empresa para os outros computadores enxergarem.
+          </Alerta>
+        </div>
+      )}
 
       <div className="conexoes">
         <div className="caixa lista-conexoes">
@@ -132,16 +178,34 @@ export function Pagina_Conexoes() {
                 <button key={p.id} className={p.id === form.id ? 'atual' : ''} onClick={() => abrir(p)}>
                   <span className="cor" style={{ background: p.cor }} />
                   <span>
-                    <div style={{ fontWeight: 600 }}>{p.nome} {p.id === ativa?.id && <span className="etiqueta ok">em uso</span>}</div>
+                    <div style={{ fontWeight: 600 }}>{p.nome} {p.id === ativa?.id && <span className="etiqueta ok">em uso</span>} {p.autenticacao === 'sql' && !p.temSenha && <span className="etiqueta erro">sem senha</span>}</div>
                     <div className="linha2">{p.servidor}{p.instancia ? '\\' + p.instancia : ''} / {p.banco || 'sem banco'}</div>
                   </span>
                 </button>
               ))}
             </div>
           ))}
-          {perfis.length === 0 && <p className="fraco" style={{ padding: 12 }}>Nenhuma conexão ainda. Crie a primeira com o banco de um cliente.</p>}
+          {perfis.length === 0 && <p className="fraco" style={{ padding: 12 }}>Nenhuma conexão em {empresaAtual?.nome ?? 'esta empresa'} ainda.{admin ? ' Crie a primeira com o banco do ERP.' : ''}</p>}
         </div>
 
+        <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {!admin && form.id && (
+          <div className="caixa form-conexao">
+            <h2>Senha do SQL neste computador</h2>
+            <p className="fraco mini" style={{ marginBottom: 12 }}>
+              {form.autenticacao === 'windows'
+                ? 'Esta conexão usa o login do Windows: não precisa de senha.'
+                : form.temSenha ? 'A senha já está guardada neste computador. Digite outra só se ela mudou.' : `Informe a senha do usuário ${form.usuario} para usar ${form.cliente} › ${form.nome} neste computador.`}
+            </p>
+            {form.autenticacao === 'sql' && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <input className="entrada" style={{ width: 260 }} type="password" value={senha} onChange={(e) => setSenha(e.target.value)} placeholder={form.temSenha ? 'Salva' : 'Senha do SQL'} autoComplete="new-password" />
+                <button className="botao primario" disabled={!senha} onClick={() => void salvarSoSenha()}>Guardar senha</button>
+                <button className="botao" onClick={() => void testar()} disabled={testando}>{testando ? <span className="spinner" /> : <Icone nome="banco" />} Testar conexão</button>
+              </div>
+            )}
+          </div>
+        )}
         <fieldset className="caixa form-conexao" disabled={!admin} style={{ margin: 0, minWidth: 0 }}>
           <h2>{form.id ? `${form.cliente} › ${form.nome}` : 'Nova conexão'}</h2>
           <p className="fraco mini" style={{ marginBottom: 16 }}>Todos os clientes usam o mesmo ERP; aqui muda só onde está o banco e as regras de cada um.</p>
@@ -165,7 +229,7 @@ export function Pagina_Conexoes() {
             </label>
             {form.autenticacao === 'sql' && <>
               <label className="campo c4"><span>Usuário</span><input className="entrada" value={form.usuario} onChange={(e) => muda('usuario', e.target.value)} /></label>
-              <label className="campo c4"><span>Senha</span><input className="entrada" type="password" value={senha} onChange={(e) => setSenha(e.target.value)} placeholder={form.temSenha ? 'Salva (digite para trocar)' : ''} autoComplete="new-password" /></label>
+              {admin && <label className="campo c4"><span>Senha deste computador</span><input className="entrada" type="password" value={senha} onChange={(e) => setSenha(e.target.value)} placeholder={form.temSenha ? 'Salva (digite para trocar)' : ''} autoComplete="new-password" /></label>}
             </>}
 
             <label className="campo c6"><span>Banco de dados</span>
@@ -236,10 +300,11 @@ export function Pagina_Conexoes() {
             {form.id && <button className="botao perigo" onClick={() => void excluir()}><Icone nome="lixo" /> Excluir</button>}
             <div className="direita">
               {form.id && ativa?.id !== form.id && <button className="botao" onClick={() => selecionar(form.id)}>Usar esta conexão</button>}
-              <button className="botao primario" onClick={() => void salvar()} disabled={salvando}>{salvando ? <span className="spinner" /> : null} Salvar conexão</button>
+              <button className="botao primario" onClick={() => void salvar()} disabled={salvando || !internet}>{salvando ? <span className="spinner" /> : null} Salvar conexão</button>
             </div>
           </div>
         </fieldset>
+        </div>
       </div>
 
       <Modal aberto={!!arquivo} aoFechar={() => setArquivo(null)} rotulo={arquivo === 'exportar' ? 'Exportar conexões' : 'Importar conexões'}

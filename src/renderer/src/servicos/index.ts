@@ -14,4 +14,5 @@ export async function iniciarServicos() {
   }
 }
 
-export type { Nuvem, Perfil, Papel, RegistroHistorico } from './nuvem'
+export type { Nuvem, Perfil, Papel, RegistroHistorico, Empresa, ConexaoNuvem } from './nuvem'
+export { ehErroDeRede } from './nuvem'

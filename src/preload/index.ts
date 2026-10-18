@@ -14,6 +14,8 @@ const api: Api = {
     excluir: (id) => chamar('conexoes:excluir', id),
     testar: (perfil, senha) => chamar('conexoes:testar', perfil, senha),
     nativoDisponivel: () => chamar('conexoes:nativoDisponivel'),
+    sincronizar: (empresaId, lista) => chamar('conexoes:sincronizar', empresaId, lista),
+    salvarSenha: (id, senha) => chamar('conexoes:salvarSenha', id, senha),
     exportar: (ids, senha) => chamar('conexoes:exportar', ids, senha),
     importar: (senha) => chamar('conexoes:importar', senha)
   },
@@ -31,6 +33,18 @@ const api: Api = {
   },
   sistema: {
     estacao: () => chamar('sistema:estacao')
+  },
+  offline: {
+    lembrar: (email, senha, perfil) => chamar('offline:lembrar', email, senha, perfil),
+    atualizarPerfil: (perfil) => chamar('offline:atualizarPerfil', perfil),
+    entrar: (email, senha) => chamar('offline:entrar', email, senha),
+    perfilPorId: (id) => chamar('offline:perfilPorId', id),
+    esquecer: (email) => chamar('offline:esquecer', email)
+  },
+  fila: {
+    adicionar: (r) => chamar('fila:adicionar', r),
+    listar: () => chamar('fila:listar'),
+    remover: (chaves) => chamar('fila:remover', chaves)
   },
   atualizacao: {
     versao: () => ipcRenderer.invoke('atualizacao:versao'),

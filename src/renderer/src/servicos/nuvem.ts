@@ -1,7 +1,10 @@
-// Tudo que fala com o Supabase: login, perfis de usuário e histórico central.
+// Tudo que fala com o Supabase: login, empresas, usuários, conexões da empresa e histórico.
+// A separação entre empresas é garantida no banco (RLS, supabase/migrations/002_empresas.sql);
+// os filtros daqui são só para a tela.
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import type { DadosConexaoNuvem } from '@shared/tipos'
 
-export type Papel = 'admin' | 'operador'
+export type Papel = 'super_admin' | 'admin' | 'operador'
 
 export interface Perfil {
   id: string
@@ -9,11 +12,29 @@ export interface Perfil {
   email: string
   papel: Papel
   ativo: boolean
+  empresa_id: string | null
+  empresa_nome: string
+  empresa_ativa: boolean
+}
+
+export interface Empresa {
+  id: string
+  nome: string
+  cnpj: string
+  ativa: boolean
+  retencao_meses: number
+  criado_em?: string
+  usuarios?: number
+  prevendas_mes?: number
+  total_mes?: number
+  ultima_atividade?: string | null
 }
 
 export interface RegistroHistorico {
   id?: number
   criado_em?: string
+  empresa_id?: string
+  chave_local?: string
   usuario_nome: string
   estacao: string
   conexao_cliente: string
@@ -30,6 +51,14 @@ export interface RegistroHistorico {
   total: number
   total_com_st: number
   arquivo_pdf: string
+  empresas?: { nome: string } | null
+}
+
+export interface ConexaoNuvem {
+  id: string
+  empresa_id: string
+  dados: DadosConexaoNuvem
+  atualizado_em?: string
 }
 
 export interface Nuvem {
@@ -39,13 +68,24 @@ export interface Nuvem {
   usuarioAtualId(): Promise<string | null>
   aoMudarSessao(fn: (logado: boolean) => void): () => void
   meuPerfil(): Promise<Perfil | null>
+  online(): Promise<boolean>
+  // histórico
   registrarPreVenda(r: RegistroHistorico): Promise<void>
-  historico(filtro: { texto?: string; desde?: string; limite?: number }): Promise<RegistroHistorico[]>
-  jaGeradoNoHistorico(conexaoCliente: string, cnpj: string, pedido: string): Promise<RegistroHistorico[]>
-  usuarios(): Promise<Perfil[]>
-  criarUsuario(d: { email: string; senha: string; nome: string; papel: Papel }): Promise<void>
+  historico(filtro: { texto?: string; desde?: string; limite?: number; empresaId?: string | null }): Promise<RegistroHistorico[]>
+  jaGeradoNoHistorico(empresaId: string | null, cnpj: string, pedido: string): Promise<RegistroHistorico[]>
+  // usuários
+  usuarios(empresaId?: string | null): Promise<Perfil[]>
+  criarUsuario(d: { email: string; senha: string; nome: string; papel: Papel; empresa_id?: string | null }): Promise<void>
   alterarUsuario(id: string, d: Partial<Pick<Perfil, 'nome' | 'papel' | 'ativo'>>): Promise<void>
   trocarSenha(id: string, senha: string): Promise<void>
+  // empresas (super_admin)
+  empresas(): Promise<Empresa[]>
+  criarEmpresa(d: { nome: string; cnpj: string; admin_nome: string; admin_email: string; admin_senha: string }): Promise<string>
+  alterarEmpresa(id: string, d: Partial<Pick<Empresa, 'nome' | 'cnpj' | 'ativa' | 'retencao_meses'>>): Promise<void>
+  // conexões da empresa
+  conexoes(empresaId: string): Promise<ConexaoNuvem[]>
+  salvarConexao(empresaId: string, dados: DadosConexaoNuvem): Promise<void>
+  excluirConexao(id: string): Promise<void>
 }
 
 // Projeto Supabase do Gerar Pré-Venda. A chave "anon" é pública por natureza:
@@ -60,23 +100,36 @@ const CHAVE = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.tr
 
 let cliente: SupabaseClient | null = null
 function sb(): SupabaseClient {
-  if (!URL || !CHAVE) throw new Error('Supabase não configurado (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).')
   if (!cliente) cliente = createClient(URL, CHAVE, { auth: { persistSession: true, autoRefreshToken: true } })
   return cliente
+}
+
+const MSG_SEM_INTERNET = 'Sem conexão com a internet.'
+
+/** Falha de rede (sem internet / Supabase fora do ar), e não erro de regra. */
+export function ehErroDeRede(e: unknown): boolean {
+  const m = (e as Error)?.message ?? String(e)
+  return m === MSG_SEM_INTERNET || /Failed to fetch|NetworkError|fetch failed|Load failed|ERR_INTERNET|ERR_NAME_NOT_RESOLVED|network/i.test(m)
 }
 
 function traduzir(msg: string): string {
   if (/Invalid login credentials/i.test(msg)) return 'E-mail ou senha incorretos.'
   if (/Email not confirmed/i.test(msg)) return 'E-mail ainda não confirmado.'
-  if (/Failed to fetch|NetworkError|fetch failed/i.test(msg)) return 'Sem conexão com a internet (Supabase). Verifique a rede.'
+  if (/Failed to fetch|NetworkError|fetch failed|Load failed/i.test(msg)) return MSG_SEM_INTERNET
   if (/already been registered|already registered/i.test(msg)) return 'Já existe um usuário com este e-mail.'
+  if (/row-level security|permission denied/i.test(msg)) return 'Sem permissão para esta operação.'
   return msg
 }
 
 async function ou<T>(p: PromiseLike<{ data: T; error: { message: string } | null }>): Promise<T> {
-  const { data, error } = await p
-  if (error) throw new Error(traduzir(error.message))
-  return data
+  let r: { data: T; error: { message: string } | null }
+  try {
+    r = await p
+  } catch (e) {
+    throw new Error(traduzir((e as Error).message))
+  }
+  if (r.error) throw new Error(traduzir(r.error.message))
+  return r.data
 }
 
 async function funcaoAdmin(corpo: Record<string, unknown>) {
@@ -96,14 +149,35 @@ async function funcaoAdmin(corpo: Record<string, unknown>) {
   return data
 }
 
+type LinhaPerfil = Omit<Perfil, 'empresa_nome' | 'empresa_ativa'> & { empresas: { nome: string; ativa: boolean } | null }
+const COLUNAS_PERFIL = 'id, nome, email, papel, ativo, empresa_id, empresas(nome, ativa)'
+const paraPerfil = (p: LinhaPerfil): Perfil => ({
+  id: p.id,
+  nome: p.nome,
+  email: p.email,
+  papel: p.papel,
+  ativo: p.ativo,
+  empresa_id: p.empresa_id,
+  empresa_nome: p.empresas?.nome ?? '',
+  empresa_ativa: p.empresas?.ativa ?? false
+})
+
 export const nuvemSupabase: Nuvem = {
   configurada: !!(URL && CHAVE),
   async entrar(email, senha) {
-    const { error } = await sb().auth.signInWithPassword({ email: email.trim(), password: senha })
-    if (error) throw new Error(traduzir(error.message))
+    try {
+      const { error } = await sb().auth.signInWithPassword({ email: email.trim(), password: senha })
+      if (error) throw new Error(traduzir(error.message))
+    } catch (e) {
+      throw new Error(traduzir((e as Error).message))
+    }
   },
   async sair() {
-    await sb().auth.signOut()
+    try {
+      await sb().auth.signOut({ scope: 'local' })
+    } catch {
+      /* sem internet: a sessão local é apagada mesmo assim */
+    }
   },
   async usuarioAtualId() {
     const { data } = await sb().auth.getSession()
@@ -116,13 +190,26 @@ export const nuvemSupabase: Nuvem = {
   async meuPerfil() {
     const id = await this.usuarioAtualId()
     if (!id) return null
-    return (await ou(sb().from('perfis').select('id, nome, email, papel, ativo').eq('id', id).maybeSingle())) as Perfil | null
+    const p = (await ou(sb().from('perfis').select(COLUNAS_PERFIL).eq('id', id).maybeSingle())) as LinhaPerfil | null
+    return p ? paraPerfil(p) : null
   },
+  async online() {
+    try {
+      const r = await fetch(`${URL}/auth/v1/health`, { headers: { apikey: CHAVE }, cache: 'no-store' })
+      return r.ok
+    } catch {
+      return false
+    }
+  },
+
   async registrarPreVenda(r) {
-    await ou(sb().from('prevendas_geradas').insert(r))
+    const { empresas: _ignorar, ...registro } = r
+    // chave_local única: reenviar (fila offline) não duplica
+    await ou(sb().from('prevendas_geradas').upsert(registro, { onConflict: 'chave_local', ignoreDuplicates: true }))
   },
-  async historico({ texto, desde, limite = 300 }) {
-    let q = sb().from('prevendas_geradas').select('*').order('criado_em', { ascending: false }).limit(limite)
+  async historico({ texto, desde, limite = 300, empresaId }) {
+    let q = sb().from('prevendas_geradas').select('*, empresas(nome)').order('criado_em', { ascending: false }).limit(limite)
+    if (empresaId) q = q.eq('empresa_id', empresaId)
     if (desde) q = q.gte('criado_em', desde)
     if (texto?.trim()) {
       const t = texto.trim().replace(/[%,()]/g, ' ')
@@ -132,20 +219,16 @@ export const nuvemSupabase: Nuvem = {
     }
     return ((await ou(q)) ?? []) as RegistroHistorico[]
   },
-  async jaGeradoNoHistorico(conexaoCliente, cnpj, pedido) {
-    const r = await ou(
-      sb()
-        .from('prevendas_geradas')
-        .select('*')
-        .eq('conexao_cliente', conexaoCliente)
-        .eq('cliente_cnpj', cnpj)
-        .eq('pedido_compra', pedido)
-        .order('criado_em', { ascending: false })
-    )
-    return (r ?? []) as RegistroHistorico[]
+  async jaGeradoNoHistorico(empresaId, cnpj, pedido) {
+    let q = sb().from('prevendas_geradas').select('*').eq('cliente_cnpj', cnpj).eq('pedido_compra', pedido)
+    if (empresaId) q = q.eq('empresa_id', empresaId)
+    return ((await ou(q.order('criado_em', { ascending: false }))) ?? []) as RegistroHistorico[]
   },
-  async usuarios() {
-    return ((await ou(sb().from('perfis').select('id, nome, email, papel, ativo').order('nome'))) ?? []) as Perfil[]
+
+  async usuarios(empresaId) {
+    let q = sb().from('perfis').select(COLUNAS_PERFIL).order('nome')
+    if (empresaId) q = q.eq('empresa_id', empresaId)
+    return (((await ou(q)) ?? []) as unknown as LinhaPerfil[]).map(paraPerfil)
   },
   async criarUsuario(d) {
     await funcaoAdmin({ acao: 'criar', ...d })
@@ -155,5 +238,27 @@ export const nuvemSupabase: Nuvem = {
   },
   async trocarSenha(id, senha) {
     await funcaoAdmin({ acao: 'senha', id, senha })
+  },
+
+  async empresas() {
+    const r = (await ou(sb().rpc('resumo_empresas'))) as Empresa[] | null
+    return (r ?? []).map((e) => ({ ...e, usuarios: Number(e.usuarios), prevendas_mes: Number(e.prevendas_mes), total_mes: Number(e.total_mes) }))
+  },
+  async criarEmpresa(d) {
+    const r = await funcaoAdmin({ acao: 'criar_empresa', ...d })
+    return r.id as string
+  },
+  async alterarEmpresa(id, d) {
+    await ou(sb().from('empresas').update(d).eq('id', id))
+  },
+
+  async conexoes(empresaId) {
+    return ((await ou(sb().from('conexoes_empresa').select('id, empresa_id, dados, atualizado_em').eq('empresa_id', empresaId))) ?? []) as ConexaoNuvem[]
+  },
+  async salvarConexao(empresaId, dados) {
+    await ou(sb().from('conexoes_empresa').upsert({ id: dados.id, empresa_id: empresaId, dados: { ...dados, empresaId } }))
+  },
+  async excluirConexao(id) {
+    await ou(sb().from('conexoes_empresa').delete().eq('id', id))
   }
 }

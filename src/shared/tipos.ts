@@ -35,6 +35,7 @@ export const REGRAS_PADRAO: RegrasConexao = {
 /** Perfil de conexão como a interface enxerga (nunca contém a senha). */
 export interface PerfilConexao {
   id: string
+  empresaId: string // empresa (Supabase) dona desta conexão; '' = só deste computador
   cliente: string // ex.: "Hage"
   nome: string // ex.: "COMERCIO"
   cor: string // cor de identificação na barra superior
@@ -51,6 +52,9 @@ export interface PerfilConexao {
   regras: RegrasConexao
   atualizadoEm: string
 }
+
+/** Cadastro da conexão como vai para a nuvem (nunca leva senha). */
+export type DadosConexaoNuvem = Omit<PerfilConexao, 'temSenha' | 'atualizadoEm'>
 
 export interface DiagnosticoItem {
   ok: boolean

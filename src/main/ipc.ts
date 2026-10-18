@@ -1,10 +1,11 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { readFile, writeFile } from 'fs/promises'
-import type { PedidoEnvio, PerfilConexao } from '@shared/tipos'
+import type { DadosConexaoNuvem, PedidoEnvio, PerfilConexao } from '@shared/tipos'
 import * as conexoes from './conexoes'
 import * as db from './db'
 import * as erp from './erp'
 import { lerPdf } from './pdf'
+import * as offline from './offline'
 
 type Resposta<T> = { ok: true; dados: T } | { ok: false; erro: string }
 
@@ -39,6 +40,25 @@ export function registrarIpc(janela: () => BrowserWindow | null) {
     return db.testar(perfil, await conexoes.senhaParaTeste(perfil, senha))
   })
   handle('conexoes:nativoDisponivel', () => db.nativoDisponivel())
+  handle('conexoes:sincronizar', async (empresaId: string, lista: DadosConexaoNuvem[]) => {
+    await conexoes.sincronizar(empresaId, lista)
+    await db.fecharTodos() // cadastro pode ter mudado: reconecta na próxima consulta
+  })
+  handle('conexoes:salvarSenha', async (id: string, senha: string) => {
+    const r = await conexoes.salvarSenha(id, senha)
+    await db.fecharPool(id)
+    return r
+  })
+
+  // ---------------- modo offline ----------------
+  handle('offline:lembrar', (email: string, senha: string, perfil: offline.PerfilOffline) => offline.lembrar(email, senha, perfil))
+  handle('offline:atualizarPerfil', (perfil: offline.PerfilOffline) => offline.atualizarPerfil(perfil))
+  handle('offline:entrar', (email: string, senha: string) => offline.entrar(email, senha))
+  handle('offline:perfilPorId', (id: string) => offline.perfilPorId(id))
+  handle('offline:esquecer', (email: string) => offline.esquecer(email))
+  handle('fila:adicionar', (r: Record<string, unknown> & { chave_local: string }) => offline.filaAdicionar(r))
+  handle('fila:listar', () => offline.filaListar())
+  handle('fila:remover', (chaves: string[]) => offline.filaRemover(chaves))
   handle('conexoes:exportar', async (ids: string[], senhaArquivo: string) => {
     const conteudo = await conexoes.exportar(ids, senhaArquivo)
     const r = await dialog.showSaveDialog(janela()!, {

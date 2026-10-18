@@ -15,7 +15,9 @@ const caminhos: Record<string, string> = {
   sair: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
   seta: 'M6 9l6 6 6-6',
   exportar: 'M12 15V3m0 0L8 7m4-4 4 4M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4',
-  importar: 'M12 3v12m0 0-4-4m4 4 4-4M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4'
+  importar: 'M12 3v12m0 0-4-4m4 4 4-4M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4',
+  empresa: 'M3 21h18M5 21V7l7-4 7 4v14M9 9h1M14 9h1M9 13h1M14 13h1M10 21v-4h4v4',
+  planilha: 'M4 4h16v16H4zM4 10h16M4 15h16M10 4v16'
 }
 
 export function Icone({ nome, tamanho = 18 }: { nome: keyof typeof caminhos | string; tamanho?: number }) {

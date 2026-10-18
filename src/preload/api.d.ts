@@ -1,4 +1,5 @@
 import type {
+  DadosConexaoNuvem,
   ClienteErp, PedidoEnvio, PerfilConexao, PreVendaExistente, ProdutoErp, ResultadoGeracao, ResultadoPdf, ResultadoTeste
 } from '../shared/tipos'
 
@@ -10,6 +11,19 @@ export type EstadoAtualizacao =
   | { tipo: 'atualizado' }
   | { tipo: 'erro'; mensagem: string }
 
+export interface PerfilOffline {
+  id: string
+  nome: string
+  email: string
+  papel: string
+  ativo: boolean
+  empresa_id: string | null
+  empresa_nome: string
+  empresa_ativa: boolean
+}
+
+export type RegistroFila = Record<string, unknown> & { chave_local: string }
+
 export interface Api {
   conexoes: {
     listar(): Promise<PerfilConexao[]>
@@ -17,6 +31,8 @@ export interface Api {
     excluir(id: string): Promise<void>
     testar(perfil: PerfilConexao, senha?: string): Promise<ResultadoTeste>
     nativoDisponivel(): Promise<boolean>
+    sincronizar(empresaId: string, lista: DadosConexaoNuvem[]): Promise<void>
+    salvarSenha(id: string, senha: string): Promise<PerfilConexao>
     exportar(ids: string[], senhaArquivo: string): Promise<boolean>
     importar(senhaArquivo: string): Promise<number>
   }
@@ -34,6 +50,18 @@ export interface Api {
   }
   sistema: {
     estacao(): Promise<string>
+  }
+  offline: {
+    lembrar(email: string, senha: string, perfil: PerfilOffline): Promise<void>
+    atualizarPerfil(perfil: PerfilOffline): Promise<void>
+    entrar(email: string, senha: string): Promise<PerfilOffline>
+    perfilPorId(id: string): Promise<PerfilOffline | null>
+    esquecer(email: string): Promise<void>
+  }
+  fila: {
+    adicionar(r: RegistroFila): Promise<number>
+    listar(): Promise<RegistroFila[]>
+    remover(chaves: string[]): Promise<number>
   }
   atualizacao: {
     versao(): Promise<string>
