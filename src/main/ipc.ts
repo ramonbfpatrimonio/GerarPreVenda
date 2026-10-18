@@ -6,7 +6,7 @@ import * as db from './db'
 import * as erp from './erp'
 import { lerPdf } from './pdf'
 import * as offline from './offline'
-import * as backup from './backup'
+import * as aparencia from './aparencia'
 
 type Resposta<T> = { ok: true; dados: T } | { ok: false; erro: string }
 
@@ -122,18 +122,7 @@ export function registrarIpc(janela: () => BrowserWindow | null) {
   })
   handle('sistema:estacao', () => erp.estacao())
 
-  // ---------------- backups e aparência ----------------
-  handle('backup:listar', () => backup.listarBackups())
-  handle('backup:fazer', () => backup.fazerBackup(false))
-  handle('backup:restaurar', async (nome: string) => {
-    const r = await backup.restaurar(nome)
-    conexoes.esquecerCache()
-    await db.fecharTodos()
-    return r
-  })
-  handle('backup:abrirPasta', () => backup.abrirPasta())
-  handle('backup:pasta', () => backup.pastaBackups())
-  handle('backup:salvarArquivo', (nome: string, conteudo: string) => backup.salvarArquivo(janela(), nome, conteudo))
-  handle('aparencia:ler', () => backup.lerAparencia())
-  handle('aparencia:salvar', (a: backup.Aparencia | null) => backup.salvarAparencia(a))
+  // ---------------- aparência (só deste computador) ----------------
+  handle('aparencia:ler', () => aparencia.lerAparencia())
+  handle('aparencia:salvar', (a: aparencia.Aparencia | null) => aparencia.salvarAparencia(a))
 }

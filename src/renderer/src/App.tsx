@@ -9,12 +9,11 @@ import { Pagina_Usuarios } from './paginas/Usuarios'
 import { Pagina_Login } from './paginas/Login'
 import { Pagina_Empresas } from './paginas/Empresas'
 import { Pagina_Eventos } from './paginas/Eventos'
-import { Pagina_Backups } from './paginas/Backups'
 import { Pagina_Aparencia } from './paginas/Aparencia'
 import { AdminProvider, useAdmin } from './admin'
 
-export type Aba = 'pedido' | 'historico' | 'conexoes' | 'usuarios' | 'eventos' | 'backups' | 'aparencia' | 'empresas'
-const ABAS_ADMIN: Aba[] = ['conexoes', 'usuarios', 'eventos', 'backups', 'aparencia', 'empresas']
+export type Aba = 'pedido' | 'historico' | 'conexoes' | 'usuarios' | 'eventos' | 'aparencia' | 'empresas'
+const ABAS_ADMIN: Aba[] = ['conexoes', 'usuarios', 'eventos', 'aparencia', 'empresas']
 
 function abaInicial(): Aba {
   const a = new URLSearchParams(location.search).get('aba') as Aba | null
@@ -53,7 +52,6 @@ function Programa() {
     { id: 'conexoes', rotulo: 'Conexões', icone: 'banco', mostrar: !!admin.perfil },
     { id: 'usuarios', rotulo: 'Usuários', icone: 'usuarios', mostrar: !!admin.perfil },
     { id: 'eventos', rotulo: 'Eventos do sistema', icone: 'eventos', mostrar: !!admin.perfil },
-    { id: 'backups', rotulo: 'Backups', icone: 'backup', mostrar: !!admin.perfil },
     { id: 'aparencia', rotulo: 'Aparência', icone: 'imagem', mostrar: !!admin.perfil },
     { id: 'empresas', rotulo: 'Empresas', icone: 'empresa', mostrar: admin.ehSuper }
   ]
@@ -85,7 +83,6 @@ function Programa() {
         {admin.perfil && aba === 'conexoes' && <Pagina_Conexoes />}
         {admin.perfil && <Pagina_Usuarios visivel={aba === 'usuarios'} />}
         {admin.perfil && <Pagina_Eventos visivel={aba === 'eventos'} />}
-        {admin.perfil && <Pagina_Backups visivel={aba === 'backups'} />}
         {admin.perfil && <Pagina_Aparencia visivel={aba === 'aparencia'} />}
         {admin.ehSuper && <Pagina_Empresas visivel={aba === 'empresas'} irParaPedido={() => setAba('pedido')} />}
       </div>

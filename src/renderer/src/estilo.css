@@ -363,7 +363,7 @@ p { margin: 0; }
 .previa-login .previa-form .ficticio { height: 22px; border: 1px solid var(--linha-forte); border-radius: 4px; }
 .previa-login .previa-form .ficticio.botao-f { background: var(--acao); border: 0; }
 
-/* ------------------------------------------------------------------ eventos, backups, aparência */
+/* ------------------------------------------------------------------ eventos e aparência */
 .etiqueta.aviso { background: var(--aviso-fundo); color: var(--aviso); }
 .nowrap { white-space: nowrap; }
 .mono { font-variant-numeric: tabular-nums; font-family: 'IBM Plex Mono', ui-monospace, Consolas, monospace; }
@@ -373,13 +373,11 @@ p { margin: 0; }
 .caixa.bloco { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
 .caixa.bloco h2 { margin: 0; font-size: 16px; }
 .caixa.bloco p { margin: 0; }
-.grade-backups { display: grid; grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr); gap: 16px; align-items: start; }
-.pasta-backup { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--grafite); background: var(--papel); border: 1px solid var(--linha); border-radius: 6px; padding: 7px 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .grade-aparencia { display: grid; grid-template-columns: minmax(300px, 2fr) minmax(0, 3fr); gap: 16px; align-items: start; }
 .miniatura { position: relative; border-radius: var(--raio); border: 1px solid var(--linha-forte); background-size: cover; background-position: center; background-color: #0b3d44; }
 .miniatura.logo { height: 120px; background-size: contain; background-repeat: no-repeat; background-color: #fff; background-origin: content-box; padding: 14px; }
 .miniatura span { position: absolute; right: 8px; bottom: 8px; font-size: 11px; background: rgba(0,0,0,.55); color: #fff; padding: 2px 7px; border-radius: 10px; }
-@media (max-width: 1250px) { .grade-backups, .grade-aparencia { grid-template-columns: 1fr; } }
+@media (max-width: 1250px) { .grade-aparencia { grid-template-columns: 1fr; } }
 
 .ajuste-fundo { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .ajuste-fundo label { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; row-gap: 2px; align-items: start; border: 1px solid var(--linha-forte); border-radius: var(--raio); padding: 9px 10px; cursor: pointer; }

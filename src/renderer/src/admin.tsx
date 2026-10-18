@@ -1,6 +1,6 @@
 // Área administrativa oculta (Ctrl+Shift+B).
 //
-// Conexões, Usuários, Eventos do sistema, Backups, Aparência e Empresas só
+// Conexões, Usuários, Eventos do sistema, Aparência e Empresas só
 // aparecem depois que um administrador informa e-mail e senha. A sessão
 // administrativa é separada da sessão de quem está usando o programa: um
 // administrador pode desbloquear no computador de um operador sem desconectá-lo,
@@ -163,7 +163,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
         <form onSubmit={entrar} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
             <h2>Área administrativa</h2>
-            <p className="fraco mini">Conexões, usuários, eventos, backups e aparência. Informe o login de um administrador.</p>
+            <p className="fraco mini">Conexões, usuários, eventos e aparência. Informe o login de um administrador.</p>
           </div>
           {erro && <Alerta tipo="erro">{erro}</Alerta>}
           <label className="campo"><span>E-mail</span><input className="entrada" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus={!email} autoComplete="off" /></label>

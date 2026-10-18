@@ -4,7 +4,7 @@ import { formatarCnpj, soDigitos } from '@shared/numeros'
 import { useAviso, useConexoes, useSessao } from '../contexto'
 import { useAdmin } from '../admin'
 import { Icone } from '../componentes/Icone'
-import { Alerta } from '../componentes/Modal'
+import { Alerta, Modal } from '../componentes/Modal'
 
 const CORES = ['#1f5f9e', '#0e7c5a', '#7a3fb5', '#b4461b', '#a3122a', '#8a6100', '#0f6470', '#3d4a5c', '#b0306a', '#4b6b12']
 
@@ -27,6 +27,8 @@ export function Pagina_Conexoes() {
   const [teste, setTeste] = useState<ResultadoTeste | null>(null)
   const [testando, setTestando] = useState(false)
   const [salvando, setSalvando] = useState(false)
+  const [arquivo, setArquivo] = useState<'exportar' | 'importar' | null>(null)
+  const [senhaArquivo, setSenhaArquivo] = useState('')
   const [nativo, setNativo] = useState(true)
   const [cnpjNovo, setCnpjNovo] = useState('')
 
@@ -127,6 +129,31 @@ export function Pagina_Conexoes() {
     }
   }
 
+  const executarArquivo = async () => {
+    setSalvando(true)
+    try {
+      if (arquivo === 'exportar') {
+        if (await window.api.conexoes.exportar(perfis.map((p) => p.id), senhaArquivo)) {
+          void adm.registrar({ acao: 'exportou', entidade: 'conexão', descricao: `Exportou ${perfis.length} conexão(ões) com as senhas do SQL` })
+          avisar('Arquivo de conexões salvo.', 'ok')
+        }
+      } else {
+        const n = await window.api.conexoes.importar(senhaArquivo)
+        if (n) {
+          await recarregar()
+          void adm.registrar({ acao: 'importou', entidade: 'conexão', descricao: `Importou ${n} conexão(ões) com as senhas do SQL neste computador` })
+          avisar(`${n} conexão(ões) importada(s).`, 'ok')
+        }
+      }
+      setArquivo(null)
+      setSenhaArquivo('')
+    } catch (e) {
+      avisar((e as Error).message, 'erro')
+    } finally {
+      setSalvando(false)
+    }
+  }
+
   const grupos = perfis.reduce<Record<string, PerfilConexao[]>>((g, p) => ((g[p.cliente] ??= []).push(p), g), {})
 
   return (
@@ -138,6 +165,8 @@ export function Pagina_Conexoes() {
         </div>
         {admin && (
           <div className="acoes">
+            <button className="botao" onClick={() => setArquivo('importar')} title="Trazer conexões com as senhas do SQL de outro computador">Importar</button>
+            <button className="botao" onClick={() => setArquivo('exportar')} disabled={!perfis.length} title="Levar as conexões com as senhas do SQL para outro computador">Exportar</button>
             <button className="botao primario" onClick={() => abrir(vazio(empresaAtual?.id))} disabled={!empresaAtual}><Icone nome="mais" /> Nova conexão</button>
           </div>
         )}
@@ -296,6 +325,12 @@ export function Pagina_Conexoes() {
         </div>
       </div>
 
+      <Modal aberto={!!arquivo} aoFechar={() => !salvando && setArquivo(null)} rotulo={arquivo === 'exportar' ? 'Exportar conexões' : 'Importar conexões'}
+        botoes={<><button className="botao" onClick={() => setArquivo(null)} disabled={salvando}>Cancelar</button><button className="botao primario" onClick={() => void executarArquivo()} disabled={salvando || senhaArquivo.length < 4}>{arquivo === 'exportar' ? 'Escolher onde salvar' : 'Escolher arquivo'}</button></>}>
+        <h2>{arquivo === 'exportar' ? `Exportar ${perfis.length} conexão(ões)` : 'Importar conexões'}</h2>
+        <p className="fraco mini">{arquivo === 'exportar' ? 'Leva as conexões com as senhas do SQL para outro computador. Crie uma senha para o arquivo; ela será pedida na importação.' : 'Informe a senha usada ao exportar.'}</p>
+        <label className="campo"><span>Senha do arquivo</span><input className="entrada" type="password" value={senhaArquivo} onChange={(e) => setSenhaArquivo(e.target.value)} autoFocus /><small>Mínimo de 4 caracteres</small></label>
+      </Modal>
     </div>
   )
 }

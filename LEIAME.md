@@ -56,12 +56,12 @@ Na tela, todo mundo vê só **Pedido** e **Histórico**. O resto fica oculto na 
 | Papel | Vê e faz |
 |---|---|
 | **Super administrador** (você) | Todas as empresas: cria e bloqueia empresas, escolhe em qual empresa trabalhar na faixa do topo, vê histórico e eventos de todas |
-| **Administrador da empresa** | Só a própria empresa: conexões, usuários, eventos, backups e aparência |
+| **Administrador da empresa** | Só a própria empresa: conexões, usuários, eventos e aparência |
 | **Operador** | Gera pré-vendas e vê o histórico da própria empresa. Não abre a área administrativa |
 
 ### Área administrativa (Ctrl + Shift + B)
 - Em qualquer tela, aperte **Ctrl + Shift + B** e informe e-mail e senha de um administrador.
-- Aparecem as abas **Conexões, Usuários, Eventos do sistema, Backups, Aparência** (e **Empresas** para o super administrador).
+- Aparecem as abas **Conexões, Usuários, Eventos do sistema, Aparência** (e **Empresas** para o super administrador).
 - É uma sessão separada: dá para abrir no computador de um operador sem desconectar ele; tudo o que for feito fica
   registrado no nome do administrador. Fecha sozinha após **10 minutos sem uso** ou em **Fechar administração**.
 - Tentativas de operador ou senha errada ficam registradas nos eventos como **Negado**.
@@ -71,22 +71,14 @@ Em Conexões, desmarque **Conexão ativa** (ou clique em **Desativar**). Ela som
 e do pedido em todos os computadores da empresa, mas o cadastro continua lá para reativar depois.
 
 ### Eventos do sistema
-Lista quem **criou, alterou, excluiu, salvou, gerou, entrou, saiu, fez backup, restaurou**, com **dia, hora com
+Lista quem **criou, alterou, excluiu, salvou, gerou, entrou, saiu, exportou, importou**, com **dia, hora com
 segundos, estação (nome do computador) e usuário**. Filtros por período, ação, item e texto; **Exportar para Excel**.
 Clique numa linha para ver os detalhes (o que era antes e o que ficou). Os registros de conexões, usuários, empresas
 e pré-vendas são gravados pelo próprio banco (gatilhos), então não dependem do programa. Sem internet,
 os eventos ficam na fila junto com as pré-vendas. São apagados junto com o histórico (prazo da empresa).
 
-### Backups
-- **Este computador:** um backup automático por dia ao abrir o programa em `Documentos\Gerar Pre-Venda\Backups`
-  (conexões com as senhas do SQL cifradas, fila sem internet e aparência). Ficam os 30 mais recentes.
-  **Restaurar** faz antes um backup do estado atual. As senhas só abrem no mesmo usuário do Windows.
-- **Empresa na nuvem:** baixa um `.json` com usuários, conexões, histórico e eventos (sem senhas).
-- **Senhas do SQL para outro computador:** Exportar/Importar conexões (arquivo protegido por senha).
-
 ### Aparência (papel de parede e logo do cliente)
-A aparência é **local**: fica só no computador onde foi configurada (arquivo `aparencia.json` na pasta do programa,
-incluído no backup local), não vai para a nuvem. Cada computador pode ter a sua.
+A aparência é **local**: fica só no computador onde foi configurada (arquivo `aparencia.json` na pasta do programa), não vai para a nuvem. Cada computador pode ter a sua.
 
 Em **Aparência**, importe o papel de parede (3/4 da tela de login, à esquerda) e a logo do cliente (PNG transparente):
 - O papel de parede **acompanha o tamanho da janela e nunca estica** (a proporção é sempre mantida). Dois ajustes:
@@ -215,7 +207,7 @@ Em **CNPJ da empresa deste banco**, informe o CNPJ do fornecedor (ex.: Hage 39.6
 o programa sugere a conexão certa ao abrir o PDF e avisa se você estiver em outra.
 
 As senhas dos bancos **não vão para a nuvem**: ficam cifradas pelo Windows neste computador.
-Em **Backups**, use **Exportar/Importar conexões** para levar as conexões a outro PC (arquivo protegido por senha).
+Em **Conexões**, use **Exportar** / **Importar** para levar as conexões a outro PC (arquivo protegido por senha).
 
 ---
 

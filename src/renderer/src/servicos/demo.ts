@@ -6,7 +6,7 @@ import type { Api, RegistroFila } from '../../../preload/api'
 import type { DadosConexaoNuvem, PerfilConexao, ProdutoErp, ResultadoPdf } from '@shared/tipos'
 import { REGRAS_PADRAO } from '@shared/tipos'
 import type { Empresa, Evento, NovoEvento, Nuvem, Perfil, RegistroHistorico } from './nuvem'
-import type { AparenciaLocal, InfoBackup } from '../../../preload/api'
+import type { AparenciaLocal } from '../../../preload/api'
 import pedidosDemo from './demo-pedidos.json'
 
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -85,11 +85,6 @@ const historico: RegistroHistorico[] = [
 ]
 const fila: RegistroFila[] = []
 
-const novoBackup = (automatico: boolean, diasAtras: number): InfoBackup => {
-  const d = new Date(Date.now() - diasAtras * 86400000)
-  return { nome: d.toISOString().replace(/[:.]/g, '-').slice(0, 19) + (automatico ? '-auto' : ''), criadoEm: d.toISOString(), automatico, arquivos: ['conexoes.json', 'fila-historico.dat', 'aparencia.json'], tamanho: 4812 + diasAtras * 37 }
-}
-const backups: InfoBackup[] = [0, 1, 2, 3, 5].map((d) => novoBackup(true, d))
 let aparenciaLocal: AparenciaLocal | null = null
 
 let idEvento = 1
@@ -196,18 +191,6 @@ export function instalarApiDemo() {
       }
     },
     sistema: { estacao: async () => 'VENDAS-01' },
-    backup: {
-      listar: async () => [...backups],
-      fazer: async () => {
-        const b = novoBackup(false, 0)
-        backups.unshift(b)
-        return b
-      },
-      restaurar: async () => ['conexoes.json', 'fila-historico.dat', 'aparencia.json'],
-      abrirPasta: async () => undefined,
-      pasta: async () => 'C:\\Users\\vendas\\Documents\\Gerar Pre-Venda\\Backups',
-      salvarArquivo: async (nome) => `C:\\Users\\vendas\\Downloads\\${nome}`
-    },
     aparencia: {
       ler: async () => aparenciaLocal,
       salvar: async (a) => {
@@ -373,11 +356,6 @@ function fabricarDemo(quem: () => Perfil | null): Nuvem {
       .filter((e) => !t || `${e.descricao} ${e.usuario_nome} ${e.estacao}`.toLowerCase().includes(t))
       .map((e) => ({ ...e, empresas: { nome: empresas.find((x) => x.id === e.empresa_id)?.nome ?? '' } }))
   },
-  async backupEmpresa(empresaId) {
-    redeOk()
-    await espera(500)
-    return { formato: 'gerar-pre-venda/backup-empresa', versao: 1, empresa: empresas.find((e) => e.id === empresaId), historico: historico.filter((h) => h.empresa_id === empresaId) }
-  }
   }
 }
 

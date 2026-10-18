@@ -3,7 +3,6 @@ import { join } from 'path'
 import { registrarIpc } from './ipc'
 import { configurarAtualizacao } from './atualizacao'
 import { fecharTodos } from './db'
-import { backupDiario } from './backup'
 
 let janela: BrowserWindow | null = null
 
@@ -61,7 +60,6 @@ if (!app.requestSingleInstanceLock()) {
     registrarIpc(() => janela)
     configurarAtualizacao(() => janela)
     criarJanela()
-    setTimeout(() => void backupDiario(), 8000)
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) criarJanela()
     })

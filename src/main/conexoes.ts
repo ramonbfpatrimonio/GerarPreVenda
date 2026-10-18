@@ -25,7 +25,7 @@ interface Arquivo {
 const caminho = () => join(app.getPath('userData'), 'conexoes.json')
 let cache: Arquivo | null = null
 
-/** Depois de restaurar um backup: relê o arquivo. */
+/** Força reler o arquivo de conexões. */
 export function esquecerCache() {
   cache = null
 }

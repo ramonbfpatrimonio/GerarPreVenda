@@ -89,8 +89,6 @@ export interface Nuvem {
   // eventos do sistema
   registrarEvento(e: NovoEvento): Promise<void>
   eventos(filtro: { desde?: string; texto?: string; acao?: string; entidade?: string; empresaId?: string | null; limite?: number }): Promise<Evento[]>
-  // backup da nuvem
-  backupEmpresa(empresaId: string): Promise<Record<string, unknown>>
 }
 
 export interface NovoEvento {
@@ -337,23 +335,6 @@ function fabricar(obter: () => SupabaseClient): Nuvem {
       q = q.or(`descricao.ilike.%${t}%,usuario_nome.ilike.%${t}%,estacao.ilike.%${t}%`)
     }
     return ((await ou(q)) ?? []) as Evento[]
-  },
-
-  async backupEmpresa(empresaId) {
-    const [empresa, usuarios, conexoes, historico, eventos] = await Promise.all([
-      ou(sb().from('empresas').select('*').eq('id', empresaId).maybeSingle()),
-      ou(sb().from('perfis').select('id, nome, email, papel, ativo, criado_em').eq('empresa_id', empresaId)),
-      ou(sb().from('conexoes_empresa').select('*').eq('empresa_id', empresaId)),
-      ou(sb().from('prevendas_geradas').select('*').eq('empresa_id', empresaId).order('criado_em')),
-      ou(sb().from('eventos_sistema').select('*').eq('empresa_id', empresaId).order('criado_em'))
-    ])
-    return {
-      formato: 'gerar-pre-venda/backup-empresa',
-      versao: 1,
-      gerado_em: new Date().toISOString(),
-      observacao: 'Senhas não fazem parte do backup (nem dos usuários, nem do SQL).',
-      empresa, usuarios, conexoes, historico, eventos
-    }
   }
   }
 }

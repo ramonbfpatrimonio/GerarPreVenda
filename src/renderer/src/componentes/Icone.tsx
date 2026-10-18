@@ -19,7 +19,6 @@ const caminhos: Record<string, string> = {
   empresa: 'M3 21h18M5 21V7l7-4 7 4v14M9 9h1M14 9h1M9 13h1M14 13h1M10 21v-4h4v4',
   planilha: 'M4 4h16v16H4zM4 10h16M4 15h16M10 4v16',
   eventos: 'M4 6h16M4 12h16M4 18h10M18 16v4M16 18h4',
-  backup: 'M4 7c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zm0 0v5c0 1.7 3.6 3 8 3M20 7v3M17 17l2 2 4-4',
   imagem: 'M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M15 9h.01',
   cadeado: 'M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3',
   olho: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z'

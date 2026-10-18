@@ -83,7 +83,7 @@ const tamanho = (s: string | null) => {
 /**
  * Papel de parede do login (3/4 esquerdo da tela) e logo do cliente.
  * Fica só neste computador (pasta do programa): não vai para a nuvem.
- * Cada computador tem a sua; entra no backup local.
+ * Cada computador tem a sua.
  */
 export function Pagina_Aparencia({ visivel }: { visivel: boolean }) {
   const { empresaAtual, aparencia, recarregarAparencia } = useSessao()

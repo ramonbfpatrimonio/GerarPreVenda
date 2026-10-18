@@ -23,8 +23,6 @@ const ACOES: Record<string, string> = {
   saiu: 'Saiu',
   acessou: 'Acessou',
   negou: 'Negado',
-  backup: 'Backup',
-  restaurou: 'Restaurou',
   exportou: 'Exportou',
   importou: 'Importou'
 }
@@ -34,7 +32,6 @@ const COR: Record<string, string> = {
   gerou: 'ok',
   salvou: 'ok',
   alterou: 'aviso',
-  restaurou: 'aviso',
   importou: 'aviso',
   excluiu: 'erro',
   negou: 'erro'
@@ -95,7 +92,7 @@ export function Pagina_Eventos({ visivel }: { visivel: boolean }) {
   }, [visivel, texto, dias, acao, entidade, todas, empresaAtual?.id, internet, adm.nuvem]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const entidades = useMemo(() => {
-    const s = new Set(['pré-venda', 'conexão', 'usuário', 'empresa', 'aparência', 'backup', 'login', 'área administrativa'])
+    const s = new Set(['pré-venda', 'conexão', 'usuário', 'empresa', 'aparência', 'login', 'área administrativa'])
     lista.forEach((e) => s.add(e.entidade))
     return [...s].sort((a, b) => a.localeCompare(b, 'pt-BR'))
   }, [lista])
