@@ -6,9 +6,12 @@
 // administrador pode desbloquear no computador de um operador sem desconectá-lo,
 // e tudo o que fizer fica registrado no nome dele. Fecha sozinha após 10 minutos
 // sem uso.
+//
+// Super administrador logado: tudo liberado direto, sem atalho e sem tempo limite
+// (usa a própria sessão dele).
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { criarNuvemAdmin, ehErroDeRede, type NovoEvento, type Nuvem, type Perfil } from './servicos'
+import { criarNuvemAdmin, ehErroDeRede, nuvem as nuvemSessao, type NovoEvento, type Nuvem, type Perfil } from './servicos'
 import { useAviso, useSessao } from './contexto'
 import { Alerta, Modal } from './componentes/Modal'
 
@@ -18,6 +21,8 @@ interface Admin {
   perfil: Perfil | null // administrador que desbloqueou
   nuvem: Nuvem | null // cliente da sessão administrativa (null = sem internet)
   ehSuper: boolean
+  /** true quando liberado direto (super administrador logado): não tem "Fechar" */
+  automatico: boolean
   abrirLogin(): void
   fechar(motivo?: string): void
   /** Evento feito pelo administrador (fica no nome dele). */
@@ -28,7 +33,8 @@ const AdminCtx = createContext<Admin>(null as unknown as Admin)
 export const useAdmin = () => useContext(AdminCtx)
 
 export function AdminProvider({ children }: { children: ReactNode }) {
-  const { perfil: logado, empresaAtual, registrarEvento, internet } = useSessao()
+  const { perfil: logado, empresaAtual, registrarEvento, internet, offline } = useSessao()
+  const superLogado = logado?.papel === 'super_admin' && logado.ativo
   const avisar = useAviso()
   const [adm, setAdm] = useState<{ perfil: Perfil; nuvem: Nuvem | null } | null>(null)
   const [modal, setModal] = useState(false)
@@ -68,12 +74,12 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     const tecla = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.shiftKey && (e.key === 'B' || e.key === 'b' || e.code === 'KeyB')) {
         e.preventDefault()
-        if (!adm) abrirLogin()
+        if (!adm && !superLogado) abrirLogin()
       }
     }
     window.addEventListener('keydown', tecla)
     return () => window.removeEventListener('keydown', tecla)
-  }, [adm, abrirLogin])
+  }, [adm, abrirLogin, superLogado])
 
   // Fecha sozinha após 10 minutos sem uso
   useEffect(() => {
@@ -144,17 +150,21 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const valor = useMemo<Admin>(
-    () => ({
+  const valor = useMemo<Admin>(() => {
+    if (superLogado && logado) {
+      const n = internet && !offline ? nuvemSessao : null
+      return { perfil: logado, nuvem: n, ehSuper: true, automatico: true, abrirLogin, fechar: () => undefined, registrar: (e) => registrarEvento(e) }
+    }
+    return {
       perfil: adm?.perfil ?? null,
       nuvem: adm?.nuvem ?? null,
       ehSuper: adm?.perfil.papel === 'super_admin',
+      automatico: false,
       abrirLogin,
       fechar,
       registrar: (e) => registrarEvento(e, adm?.nuvem)
-    }),
-    [adm, abrirLogin, fechar, registrarEvento]
-  )
+    }
+  }, [adm, abrirLogin, fechar, registrarEvento, superLogado, logado, internet, offline])
 
   return (
     <AdminCtx.Provider value={valor}>

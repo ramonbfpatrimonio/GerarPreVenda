@@ -60,7 +60,8 @@ Na tela, todo mundo vê só **Pedido** e **Histórico**. O resto fica oculto na 
 | **Operador** | Gera pré-vendas e vê o histórico da própria empresa. Não abre a área administrativa |
 
 ### Área administrativa (Ctrl + Shift + B)
-- Em qualquer tela, aperte **Ctrl + Shift + B** e informe e-mail e senha de um administrador.
+- **Super administrador** logado: tudo já aparece liberado, sem atalho e sem tempo limite.
+- Em qualquer tela, aperte **Ctrl + Shift + B** e informe e-mail e senha de um administrador. (administradores das empresas)
 - Aparecem as abas **Conexões, Usuários, Eventos do sistema, Aparência** (e **Empresas** para o super administrador).
 - É uma sessão separada: dá para abrir no computador de um operador sem desconectar ele; tudo o que for feito fica
   registrado no nome do administrador. Fecha sozinha após **10 minutos sem uso** ou em **Fechar administração**.

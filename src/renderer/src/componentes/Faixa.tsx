@@ -96,7 +96,7 @@ export function Faixa({ irPara }: { irPara: (aba: 'conexoes' | 'empresas') => vo
       )}
 
       <span className="espaco" />
-      {admin.perfil && (
+      {admin.perfil && !admin.automatico && (
         <span className="selo-admin" title="Área administrativa liberada (Ctrl+Shift+B). Fecha sozinha após 10 minutos sem uso.">
           Administração: {admin.perfil.nome}{admin.nuvem ? '' : ' (sem internet)'}
           <button onClick={() => admin.fechar()}>Fechar</button>

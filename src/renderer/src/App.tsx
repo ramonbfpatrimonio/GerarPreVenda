@@ -70,7 +70,7 @@ function Programa() {
               </button>
             </div>
           ))}
-          {admin.perfil && (
+          {admin.perfil && !admin.automatico && (
             <button className="nav-fechar-admin" onClick={() => admin.fechar()}>
               <Icone nome="cadeado" /> Fechar administração
             </button>
