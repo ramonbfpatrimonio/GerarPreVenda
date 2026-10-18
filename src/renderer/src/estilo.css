@@ -322,15 +322,59 @@ p { margin: 0; }
 .aviso-flutuante.erro { background: var(--erro); }
 .aviso-flutuante.ok { background: var(--ok); }
 
-/* ------------------------------------------------------------------ login */
-.login { min-height: 100%; display: grid; grid-template-columns: minmax(360px, 440px) 1fr; }
-.login .lado-form { background: var(--superficie); padding: 56px 48px; display: flex; flex-direction: column; justify-content: center; gap: 22px; border-right: 1px solid var(--linha); }
-.login .lado-form h1 { font-size: 26px; }
-.login .lado-info { padding: 56px; display: flex; flex-direction: column; justify-content: center; gap: 18px; color: var(--grafite); max-width: 640px; }
-.login .lado-info .faixas { display: flex; flex-direction: column; gap: 8px; }
-.login .lado-info .faixa-exemplo { height: 38px; border-radius: var(--raio); color: #fff; display: flex; align-items: center; gap: 10px; padding: 0 14px; font-weight: 600; }
 
 .carregando { display: grid; place-items: center; height: 100%; color: var(--grafite); }
 .spinner { width: 16px; height: 16px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: gira 0.7s linear infinite; display: inline-block; }
 @keyframes gira { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation-duration: 0s !important; } }
+
+/* ------------------------------------------------------------------ área administrativa */
+.nav-separador { margin: 14px 12px 4px; font-size: 11.5px; font-weight: 600; color: var(--apagado); }
+.nav .nav-fechar-admin { margin-top: 10px; color: var(--erro); font-weight: 500; }
+.nav .nav-fechar-admin:hover { background: var(--erro-fundo); color: var(--erro); }
+.selo-admin {
+  display: inline-flex; align-items: center; gap: 8px; background: #fff; color: var(--tinta);
+  border-radius: 14px; padding: 3px 4px 3px 10px; font-size: 12.5px; font-weight: 600; white-space: nowrap;
+}
+.selo-admin button { border: 0; background: var(--papel); border-radius: 10px; padding: 2px 8px; cursor: pointer; font-size: 12px; color: var(--grafite); }
+.selo-admin button:hover { background: var(--erro-fundo); color: var(--erro); }
+.faixa .logo-faixa { height: 34px; width: 34px; object-fit: contain; border-radius: 7px; background: rgba(255,255,255,0.12); padding: 3px; flex: none; }
+.faixa .logo-faixa.propria { width: auto; max-width: 150px; background: #fff; padding: 3px 7px; }
+
+/* ------------------------------------------------------------------ login (fundo 3/4 + formulário) */
+.login { min-height: 100%; height: 100%; display: grid; grid-template-columns: 3fr minmax(360px, 1fr); }
+.login .fundo-login { background-color: #0b3d44; background-size: cover; background-position: center; }
+.login .lado-form {
+  background: var(--superficie); padding: 48px 40px; display: flex; flex-direction: column; justify-content: center; gap: 20px;
+  border-left: 1px solid var(--linha); box-shadow: -12px 0 40px rgba(0,0,0,0.12);
+}
+.login .logo-login { max-width: 200px; max-height: 110px; object-fit: contain; align-self: flex-start; }
+.login .lado-form h1 { font-size: 24px; }
+.login .rodape-login { margin-top: auto; font-size: 12px; color: var(--apagado); }
+@media (max-width: 900px) { .login { grid-template-columns: 1fr; } .login .fundo-login { display: none; } }
+
+/* ------------------------------------------------------------------ aparência */
+.previa-login { display: grid; grid-template-columns: 3fr 1fr; height: 300px; border-radius: var(--raio); overflow: hidden; border: 1px solid var(--linha-forte); }
+.previa-login .previa-fundo { background-size: cover; background-position: center; background-color: #0b3d44; }
+.previa-login .previa-form { background: #fff; padding: 18px 14px; display: flex; flex-direction: column; gap: 8px; justify-content: center; }
+.previa-login .previa-form img { max-width: 100%; max-height: 54px; object-fit: contain; align-self: flex-start; }
+.previa-login .previa-form .ficticio { height: 22px; border: 1px solid var(--linha-forte); border-radius: 4px; }
+.previa-login .previa-form .ficticio.botao-f { background: var(--acao); border: 0; }
+
+/* ------------------------------------------------------------------ eventos, backups, aparência */
+.etiqueta.aviso { background: var(--aviso-fundo); color: var(--aviso); }
+.nowrap { white-space: nowrap; }
+.mono { font-variant-numeric: tabular-nums; font-family: 'IBM Plex Mono', ui-monospace, Consolas, monospace; }
+.filtros-eventos { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+.tabela-eventos td { vertical-align: top; }
+.detalhes-evento { margin: 8px 0 0; padding: 8px 10px; background: var(--papel); border: 1px solid var(--linha); border-radius: 6px; font-size: 11.5px; max-width: 640px; overflow: auto; white-space: pre-wrap; }
+.caixa.bloco { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+.caixa.bloco h2 { margin: 0; font-size: 16px; }
+.caixa.bloco p { margin: 0; }
+.grade-backups { display: grid; grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr); gap: 16px; align-items: start; }
+.pasta-backup { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--grafite); background: var(--papel); border: 1px solid var(--linha); border-radius: 6px; padding: 7px 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grade-aparencia { display: grid; grid-template-columns: minmax(300px, 2fr) minmax(0, 3fr); gap: 16px; align-items: start; }
+.miniatura { position: relative; border-radius: var(--raio); border: 1px solid var(--linha-forte); background-size: cover; background-position: center; background-color: #0b3d44; }
+.miniatura.logo { height: 120px; background-size: contain; background-repeat: no-repeat; background-color: #fff; background-origin: content-box; padding: 14px; }
+.miniatura span { position: absolute; right: 8px; bottom: 8px; font-size: 11px; background: rgba(0,0,0,.55); color: #fff; padding: 2px 7px; border-radius: 10px; }
+@media (max-width: 1250px) { .grade-backups, .grade-aparencia { grid-template-columns: 1fr; } }

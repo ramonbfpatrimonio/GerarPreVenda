@@ -25,6 +25,11 @@ interface Arquivo {
 const caminho = () => join(app.getPath('userData'), 'conexoes.json')
 let cache: Arquivo | null = null
 
+/** Depois de restaurar um backup: relê o arquivo. */
+export function esquecerCache() {
+  cache = null
+}
+
 async function carregar(): Promise<Arquivo> {
   if (cache) return cache
   if (!existsSync(caminho())) {
@@ -32,7 +37,7 @@ async function carregar(): Promise<Arquivo> {
     return cache
   }
   const dados = JSON.parse(await readFile(caminho(), 'utf8')) as Arquivo
-  dados.perfis = (dados.perfis ?? []).map((p) => ({ ...p, empresaId: p.empresaId ?? '', regras: { ...REGRAS_PADRAO, ...p.regras } }))
+  dados.perfis = (dados.perfis ?? []).map((p) => ({ ...p, empresaId: p.empresaId ?? '', ativo: p.ativo ?? true, regras: { ...REGRAS_PADRAO, ...p.regras } }))
   cache = dados
   return cache
 }
@@ -93,6 +98,7 @@ export async function salvarPerfil(perfil: PerfilConexao, senha?: string): Promi
     ...dados,
     id,
     empresaId: perfil.empresaId ?? '',
+    ativo: perfil.ativo ?? true,
     cliente: perfil.cliente.trim(),
     nome: perfil.nome.trim(),
     servidor: perfil.servidor.trim(),
@@ -126,6 +132,7 @@ export async function sincronizar(empresaId: string, lista: DadosConexaoNuvem[])
     return {
       ...dados,
       empresaId,
+      ativo: dados.ativo ?? true,
       regras: { ...REGRAS_PADRAO, ...dados.regras },
       atualizadoEm: new Date().toISOString(),
       senhaCifrada: antes?.senhaCifrada,

@@ -22,7 +22,23 @@ export interface PerfilOffline {
   empresa_ativa: boolean
 }
 
-export type RegistroFila = Record<string, unknown> & { chave_local: string }
+export type RegistroFila = Record<string, unknown> & { chave_local: string; _tipo?: 'prevenda' | 'evento' }
+
+export interface InfoBackup {
+  nome: string
+  criadoEm: string
+  automatico: boolean
+  arquivos: string[]
+  tamanho: number
+}
+
+export interface AparenciaLocal {
+  empresaId: string
+  empresaNome: string
+  fundo: string | null
+  logo: string | null
+  atualizadoEm: string
+}
 
 export interface Api {
   conexoes: {
@@ -50,6 +66,18 @@ export interface Api {
   }
   sistema: {
     estacao(): Promise<string>
+  }
+  backup: {
+    listar(): Promise<InfoBackup[]>
+    fazer(): Promise<InfoBackup>
+    restaurar(nome: string): Promise<string[]>
+    abrirPasta(): Promise<void>
+    pasta(): Promise<string>
+    salvarArquivo(nomeSugerido: string, conteudo: string): Promise<string | null>
+  }
+  aparencia: {
+    ler(): Promise<AparenciaLocal | null>
+    salvar(a: AparenciaLocal | null): Promise<void>
   }
   offline: {
     lembrar(email: string, senha: string, perfil: PerfilOffline): Promise<void>

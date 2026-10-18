@@ -34,6 +34,18 @@ const api: Api = {
   sistema: {
     estacao: () => chamar('sistema:estacao')
   },
+  backup: {
+    listar: () => chamar('backup:listar'),
+    fazer: () => chamar('backup:fazer'),
+    restaurar: (nome) => chamar('backup:restaurar', nome),
+    abrirPasta: () => chamar('backup:abrirPasta'),
+    pasta: () => chamar('backup:pasta'),
+    salvarArquivo: (nome, conteudo) => chamar('backup:salvarArquivo', nome, conteudo)
+  },
+  aparencia: {
+    ler: () => chamar('aparencia:ler'),
+    salvar: (a) => chamar('aparencia:salvar', a)
+  },
   offline: {
     lembrar: (email, senha, perfil) => chamar('offline:lembrar', email, senha, perfil),
     atualizarPerfil: (perfil) => chamar('offline:atualizarPerfil', perfil),

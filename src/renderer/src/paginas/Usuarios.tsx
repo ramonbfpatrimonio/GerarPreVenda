@@ -1,11 +1,17 @@
 import { useEffect, useState } from 'react'
-import { nuvem, type Papel, type Perfil } from '../servicos'
+import { type Papel, type Perfil } from '../servicos'
+import { useAdmin } from '../admin'
 import { useAviso, useSessao } from '../contexto'
 import { Icone } from '../componentes/Icone'
 import { Alerta, Modal } from '../componentes/Modal'
 
 export function Pagina_Usuarios({ visivel }: { visivel: boolean }) {
-  const { perfil: eu, empresaAtual, ehSuper, internet } = useSessao()
+  const { empresaAtual, internet: net } = useSessao()
+  const adm = useAdmin()
+  const eu = adm.perfil
+  const ehSuper = adm.ehSuper
+  const nuvem = adm.nuvem
+  const internet = net && !!nuvem
   const avisar = useAviso()
   const [lista, setLista] = useState<Perfil[]>([])
   const [novo, setNovo] = useState(false)
@@ -15,6 +21,7 @@ export function Pagina_Usuarios({ visivel }: { visivel: boolean }) {
   const [salvando, setSalvando] = useState(false)
 
   const carregar = async () => {
+    if (!nuvem) return
     try {
       // super_admin vê os usuários da empresa em que está trabalhando (e os outros super admins)
       const todos = await nuvem.usuarios(ehSuper ? null : empresaAtual?.id)
@@ -28,6 +35,7 @@ export function Pagina_Usuarios({ visivel }: { visivel: boolean }) {
   }, [visivel, empresaAtual?.id, internet]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const alterar = async (u: Perfil, d: Partial<Perfil>) => {
+    if (!nuvem) return
     try {
       await nuvem.alterarUsuario(u.id, d)
       await carregar()
@@ -37,9 +45,11 @@ export function Pagina_Usuarios({ visivel }: { visivel: boolean }) {
   }
 
   const criar = async () => {
+    if (!nuvem) return
     setSalvando(true)
     try {
       await nuvem.criarUsuario({ ...dados, empresa_id: empresaAtual?.id })
+      void adm.registrar({ acao: 'criou', entidade: 'usuário', descricao: `Criou o usuário ${dados.nome} (${dados.email}) como ${dados.papel === 'admin' ? 'administrador' : 'operador'}` })
       avisar(`Usuário ${dados.nome} criado.`, 'ok')
       setNovo(false)
       setDados({ nome: '', email: '', senha: '', papel: 'operador' })
@@ -52,10 +62,11 @@ export function Pagina_Usuarios({ visivel }: { visivel: boolean }) {
   }
 
   const trocarSenha = async () => {
-    if (!senhaDe) return
+    if (!senhaDe || !nuvem) return
     setSalvando(true)
     try {
       await nuvem.trocarSenha(senhaDe.id, novaSenha)
+      void adm.registrar({ acao: 'alterou', entidade: 'usuário', descricao: `Trocou a senha de ${senhaDe.nome} (${senhaDe.email})` })
       avisar(`Senha de ${senhaDe.nome} alterada.`, 'ok')
       setSenhaDe(null)
       setNovaSenha('')
@@ -72,7 +83,7 @@ export function Pagina_Usuarios({ visivel }: { visivel: boolean }) {
       <div className="cabecalho-pagina">
         <div>
           <h1>Usuários de {empresaAtual?.nome ?? 'nenhuma empresa'}</h1>
-          <p className="fraco">O mesmo login vale em todos os computadores da empresa. Operadores geram pré-vendas; administradores também cuidam de conexões e usuários.</p>
+          <p className="fraco">O mesmo login vale em todos os computadores da empresa. Operadores geram pré-vendas; administradores abrem a área administrativa com Ctrl+Shift+B.</p>
         </div>
         <div className="acoes"><button className="botao primario" onClick={() => setNovo(true)} disabled={!internet || !empresaAtual}><Icone nome="mais" /> Novo usuário</button></div>
       </div>

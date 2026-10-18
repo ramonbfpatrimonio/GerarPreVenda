@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { PerfilConexao } from '@shared/tipos'
-import { ehErroDeRede, nuvem, type Empresa, type Perfil, type RegistroHistorico } from './servicos'
+import { ehErroDeRede, nuvem, type Empresa, type NovoEvento, type Nuvem, type Perfil, type RegistroHistorico } from './servicos'
+import type { AparenciaLocal } from '../../preload/api'
 
 // ----------------------------------------------------------------- avisos
 type TipoAviso = 'info' | 'ok' | 'erro'
@@ -45,6 +46,10 @@ interface Sessao {
   // fila do histórico (pré-vendas geradas sem internet)
   pendentes: number
   registrarNoHistorico(r: RegistroHistorico): Promise<'enviado' | 'na-fila'>
+  /** Registra um evento do sistema (vai para a fila se estiver sem internet). */
+  registrarEvento(e: NovoEvento, via?: Nuvem | null): Promise<void>
+  aparencia: AparenciaLocal | null
+  recarregarAparencia(): Promise<void>
   entrar(email: string, senha: string): Promise<void>
   sair(): Promise<void>
   ehSuper: boolean
@@ -151,7 +156,7 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
 
   // ---- fila do histórico
   const atualizarPendentes = useCallback(async () => {
-    setPendentes((await window.api.fila.listar().catch(() => [])).length)
+    setPendentes((await window.api.fila.listar().catch(() => [])).filter((r) => r._tipo !== 'evento').length)
   }, [])
 
   const esvaziarFila = useCallback(async () => {
@@ -164,7 +169,9 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
       const enviados: string[] = []
       for (const r of fila) {
         try {
-          await nuvem.registrarPreVenda(r as unknown as RegistroHistorico)
+          const { _tipo, ...dados } = r
+          if (_tipo === 'evento') await nuvem.registrarEvento(dados as unknown as NovoEvento)
+          else await nuvem.registrarPreVenda(dados as unknown as RegistroHistorico)
           enviados.push(r.chave_local)
         } catch (e) {
           if (ehErroDeRede(e)) break
@@ -172,7 +179,8 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
       }
       if (enviados.length) {
         await window.api.fila.remover(enviados)
-        avisar(`${enviados.length} pré-venda(s) gerada(s) sem internet entraram no histórico.`, 'ok')
+        const pv = fila.filter((r) => enviados.includes(r.chave_local) && r._tipo !== 'evento').length
+        if (pv) avisar(`${pv} pré-venda(s) gerada(s) sem internet entraram no histórico.`, 'ok')
       }
     } finally {
       enviando.current = false
@@ -214,6 +222,26 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
     [internet, offline, atualizarPendentes]
   )
 
+  const registrarEvento = useCallback(
+    async (e: NovoEvento, via?: Nuvem | null) => {
+      const ev = { ...e, chave_local: e.chave_local ?? crypto.randomUUID(), criado_em: e.criado_em ?? new Date().toISOString() }
+      try {
+        if (!internet || offline) throw new Error('Sem conexão com a internet.')
+        await (via ?? nuvem).registrarEvento(ev)
+      } catch (err) {
+        if (!ehErroDeRede(err)) return // evento nunca impede a operação
+        await window.api.fila.adicionar({ ...(ev as unknown as Record<string, unknown>), chave_local: ev.chave_local, _tipo: 'evento' }).catch(() => undefined)
+      }
+    },
+    [internet, offline]
+  )
+
+  // ---- aparência (fundo e logo da empresa): cópia local para a tela de login
+  const [aparencia, setAparencia] = useState<AparenciaLocal | null>(null)
+  useEffect(() => {
+    window.api.aparencia.ler().then(setAparencia).catch(() => undefined)
+  }, [])
+
   // ---- empresas
   const ehSuper = perfil?.papel === 'super_admin'
   const recarregarEmpresas = useCallback(async () => {
@@ -247,6 +275,23 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
     [empresas]
   )
 
+  const recarregarAparencia = useCallback(async () => {
+    if (!empresaAtual || !internet || offline) return
+    try {
+      const a = await nuvem.aparencia(empresaAtual.id)
+      const local: AparenciaLocal | null = a
+        ? { empresaId: empresaAtual.id, empresaNome: empresaAtual.nome, fundo: a.fundo, logo: a.logo, atualizadoEm: a.atualizado_em }
+        : null
+      await window.api.aparencia.salvar(local)
+      setAparencia(local)
+    } catch {
+      /* mantém a cópia local */
+    }
+  }, [empresaAtual?.id, internet, offline]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    void recarregarAparencia()
+  }, [recarregarAparencia])
+
   const valor = useMemo<Sessao>(
     () => ({
       perfil,
@@ -260,6 +305,9 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
       recarregarEmpresas,
       pendentes,
       registrarNoHistorico,
+      registrarEvento,
+      aparencia,
+      recarregarAparencia,
       ehSuper,
       ehAdmin: ehSuper || perfil?.papel === 'admin',
       async entrar(email, senha) {
@@ -273,20 +321,27 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
           setPerfil(p)
           setOffline(true)
           setInternet(false)
+          await window.api.fila
+            .adicionar({ _tipo: 'evento', chave_local: crypto.randomUUID(), criado_em: new Date().toISOString(), acao: 'entrou', entidade: 'sessão', descricao: 'Entrou no programa sem internet (acesso offline)' })
+            .catch(() => undefined)
           return
         }
         const p = await validar(await nuvem.meuPerfil())
-        if (p) await window.api.offline.lembrar(email, senha, p).catch(() => undefined)
+        if (p) {
+          await window.api.offline.lembrar(email, senha, p).catch(() => undefined)
+          void nuvem.registrarEvento({ acao: 'entrou', entidade: 'sessão', descricao: 'Entrou no programa', chave_local: crypto.randomUUID() }).catch(() => undefined)
+        }
         setPerfil(p)
         setOffline(false)
       },
       async sair() {
+        await registrarEvento({ acao: 'saiu', entidade: 'sessão', descricao: 'Saiu do programa' })
         await nuvem.sair()
         setPerfil(null)
         setOffline(false)
       }
     }),
-    [perfil, offline, internet, carregando, erro, empresaAtual, empresas, escolherEmpresa, recarregarEmpresas, pendentes, registrarNoHistorico, ehSuper, validar]
+    [perfil, offline, internet, carregando, erro, empresaAtual, empresas, escolherEmpresa, recarregarEmpresas, pendentes, registrarNoHistorico, registrarEvento, aparencia, recarregarAparencia, ehSuper, validar]
   )
   return <SessaoCtx.Provider value={valor}>{children}</SessaoCtx.Provider>
 }
@@ -301,6 +356,7 @@ export type EstadoConexao =
 
 interface Conexoes {
   perfis: PerfilConexao[] // conexões da empresa atual (cópia local com as senhas deste PC)
+  ativos: PerfilConexao[] // só as ativas (as desativadas somem da faixa superior e do pedido)
   locais: PerfilConexao[] // conexões antigas, só deste computador (sem empresa)
   ativa: PerfilConexao | null
   status: EstadoConexao
@@ -350,7 +406,8 @@ export function ConexoesProvider({ children }: { children: ReactNode }) {
 
   const perfis = useMemo(() => todas.filter((p) => empresaAtual && p.empresaId === empresaAtual.id), [todas, empresaAtual])
   const locais = useMemo(() => todas.filter((p) => !p.empresaId), [todas])
-  const ativa = perfis.find((p) => p.id === ativaId) ?? null
+  const ativos = useMemo(() => perfis.filter((p) => p.ativo !== false), [perfis])
+  const ativa = ativos.find((p) => p.id === ativaId) ?? null
 
   const verificar = useCallback(() => {
     if (!ativa) {
@@ -387,8 +444,8 @@ export function ConexoesProvider({ children }: { children: ReactNode }) {
   )
 
   const valor = useMemo(
-    () => ({ perfis, locais, ativa, status, sincronizadoComNuvem: sincronizado, selecionar, recarregar, verificar }),
-    [perfis, locais, ativa, status, sincronizado, selecionar, recarregar, verificar]
+    () => ({ perfis, ativos, locais, ativa, status, sincronizadoComNuvem: sincronizado, selecionar, recarregar, verificar }),
+    [perfis, ativos, locais, ativa, status, sincronizado, selecionar, recarregar, verificar]
   )
   return <ConexoesCtx.Provider value={valor}>{children}</ConexoesCtx.Provider>
 }

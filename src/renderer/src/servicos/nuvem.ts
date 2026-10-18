@@ -86,6 +86,37 @@ export interface Nuvem {
   conexoes(empresaId: string): Promise<ConexaoNuvem[]>
   salvarConexao(empresaId: string, dados: DadosConexaoNuvem): Promise<void>
   excluirConexao(id: string): Promise<void>
+  // eventos do sistema
+  registrarEvento(e: NovoEvento): Promise<void>
+  eventos(filtro: { desde?: string; texto?: string; acao?: string; entidade?: string; empresaId?: string | null; limite?: number }): Promise<Evento[]>
+  // aparência (fundo/logo da tela de login)
+  aparencia(empresaId: string): Promise<{ fundo: string | null; logo: string | null; atualizado_em: string } | null>
+  salvarAparencia(empresaId: string, a: { fundo: string | null; logo: string | null }): Promise<void>
+  // backup da nuvem
+  backupEmpresa(empresaId: string): Promise<Record<string, unknown>>
+}
+
+export interface NovoEvento {
+  acao: string
+  entidade: string
+  descricao?: string
+  detalhes?: Record<string, unknown>
+  chave_local?: string
+  criado_em?: string
+  empresa_id?: string | null
+}
+
+export interface Evento {
+  id: number
+  criado_em: string
+  empresa_id: string | null
+  usuario_nome: string
+  estacao: string
+  acao: string
+  entidade: string
+  descricao: string
+  detalhes: Record<string, unknown>
+  empresas?: { nome: string } | null
 }
 
 // Projeto Supabase do Gerar Pré-Venda. A chave "anon" é pública por natureza:
@@ -98,9 +129,24 @@ const CHAVE_PADRAO =
 const URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() || URL_PADRAO
 const CHAVE = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim() || CHAVE_PADRAO
 
+// Nome do computador vai em todo pedido (o banco grava nos eventos do sistema).
+let estacao = ''
+export function definirEstacao(nome: string) {
+  estacao = (nome || '').normalize('NFD').replace(/[^\x20-\x7E]/g, '').slice(0, 60)
+}
+
+function novoCliente(persistir: boolean): SupabaseClient {
+  return createClient(URL, CHAVE, {
+    auth: persistir
+      ? { persistSession: true, autoRefreshToken: true }
+      : { persistSession: false, autoRefreshToken: true, storageKey: 'gpv-admin' },
+    global: { headers: { 'x-estacao': estacao } }
+  })
+}
+
 let cliente: SupabaseClient | null = null
 function sb(): SupabaseClient {
-  if (!cliente) cliente = createClient(URL, CHAVE, { auth: { persistSession: true, autoRefreshToken: true } })
+  if (!cliente) cliente = novoCliente(true)
   return cliente
 }
 
@@ -132,8 +178,8 @@ async function ou<T>(p: PromiseLike<{ data: T; error: { message: string } | null
   return r.data
 }
 
-async function funcaoAdmin(corpo: Record<string, unknown>) {
-  const { data, error } = await sb().functions.invoke('admin-usuarios', { body: corpo })
+async function funcaoAdmin(c: SupabaseClient, corpo: Record<string, unknown>) {
+  const { data, error } = await c.functions.invoke('admin-usuarios', { body: corpo })
   if (error) {
     let msg = error.message
     try {
@@ -162,7 +208,10 @@ const paraPerfil = (p: LinhaPerfil): Perfil => ({
   empresa_ativa: p.empresas?.ativa ?? false
 })
 
-export const nuvemSupabase: Nuvem = {
+/** Monta o serviço sobre um cliente do Supabase (o da sessão normal ou o da área administrativa). */
+function fabricar(obter: () => SupabaseClient): Nuvem {
+  const sb = obter
+  return {
   configurada: !!(URL && CHAVE),
   async entrar(email, senha) {
     try {
@@ -231,13 +280,13 @@ export const nuvemSupabase: Nuvem = {
     return (((await ou(q)) ?? []) as unknown as LinhaPerfil[]).map(paraPerfil)
   },
   async criarUsuario(d) {
-    await funcaoAdmin({ acao: 'criar', ...d })
+    await funcaoAdmin(sb(), { acao: 'criar', ...d })
   },
   async alterarUsuario(id, d) {
     await ou(sb().from('perfis').update(d).eq('id', id))
   },
   async trocarSenha(id, senha) {
-    await funcaoAdmin({ acao: 'senha', id, senha })
+    await funcaoAdmin(sb(), { acao: 'senha', id, senha })
   },
 
   async empresas() {
@@ -245,7 +294,7 @@ export const nuvemSupabase: Nuvem = {
     return (r ?? []).map((e) => ({ ...e, usuarios: Number(e.usuarios), prevendas_mes: Number(e.prevendas_mes), total_mes: Number(e.total_mes) }))
   },
   async criarEmpresa(d) {
-    const r = await funcaoAdmin({ acao: 'criar_empresa', ...d })
+    const r = await funcaoAdmin(sb(), { acao: 'criar_empresa', ...d })
     return r.id as string
   },
   async alterarEmpresa(id, d) {
@@ -260,5 +309,74 @@ export const nuvemSupabase: Nuvem = {
   },
   async excluirConexao(id) {
     await ou(sb().from('conexoes_empresa').delete().eq('id', id))
+  },
+
+  async registrarEvento(e) {
+    await ou(
+      sb().rpc('registrar_evento', {
+        p_acao: e.acao,
+        p_entidade: e.entidade,
+        p_descricao: e.descricao ?? '',
+        p_detalhes: e.detalhes ?? {},
+        p_chave_local: e.chave_local ?? null,
+        p_criado_em: e.criado_em ?? null,
+        p_empresa_id: e.empresa_id ?? null
+      })
+    )
+  },
+  async eventos({ desde, texto, acao, entidade, empresaId, limite = 1000 }) {
+    let q = sb().from('eventos_sistema').select('*, empresas(nome)').order('criado_em', { ascending: false }).limit(limite)
+    if (empresaId) q = q.eq('empresa_id', empresaId)
+    if (desde) q = q.gte('criado_em', desde)
+    if (acao) q = q.eq('acao', acao)
+    if (entidade) q = q.eq('entidade', entidade)
+    if (texto?.trim()) {
+      const t = texto.trim().replace(/[%,()]/g, ' ')
+      q = q.or(`descricao.ilike.%${t}%,usuario_nome.ilike.%${t}%,estacao.ilike.%${t}%`)
+    }
+    return ((await ou(q)) ?? []) as Evento[]
+  },
+
+  async aparencia(empresaId) {
+    return (await ou(sb().from('aparencia_empresa').select('fundo, logo, atualizado_em').eq('empresa_id', empresaId).maybeSingle())) as {
+      fundo: string | null
+      logo: string | null
+      atualizado_em: string
+    } | null
+  },
+  async salvarAparencia(empresaId, a) {
+    await ou(sb().from('aparencia_empresa').upsert({ empresa_id: empresaId, fundo: a.fundo, logo: a.logo, atualizado_em: new Date().toISOString() }))
+  },
+
+  async backupEmpresa(empresaId) {
+    const [empresa, usuarios, conexoes, historico, eventos, aparencia] = await Promise.all([
+      ou(sb().from('empresas').select('*').eq('id', empresaId).maybeSingle()),
+      ou(sb().from('perfis').select('id, nome, email, papel, ativo, criado_em').eq('empresa_id', empresaId)),
+      ou(sb().from('conexoes_empresa').select('*').eq('empresa_id', empresaId)),
+      ou(sb().from('prevendas_geradas').select('*').eq('empresa_id', empresaId).order('criado_em')),
+      ou(sb().from('eventos_sistema').select('*').eq('empresa_id', empresaId).order('criado_em')),
+      ou(sb().from('aparencia_empresa').select('*').eq('empresa_id', empresaId).maybeSingle())
+    ])
+    return {
+      formato: 'gerar-pre-venda/backup-empresa',
+      versao: 1,
+      gerado_em: new Date().toISOString(),
+      observacao: 'Senhas não fazem parte do backup (nem dos usuários, nem do SQL).',
+      empresa, usuarios, conexoes, historico, eventos, aparencia
+    }
   }
+  }
+}
+
+/** Sessão normal do programa (fica salva neste computador). */
+export const nuvemSupabase: Nuvem = fabricar(sb)
+
+/**
+ * Sessão da área administrativa (Ctrl+Shift+B): cliente separado, só em memória.
+ * Um administrador pode desbloquear no computador de um operador sem
+ * desconectar o operador; o que ele fizer fica no nome dele.
+ */
+export function criarNuvemAdmin(): Nuvem {
+  const c = novoCliente(false)
+  return fabricar(() => c)
 }

@@ -2,21 +2,24 @@ import { useEffect, useState } from 'react'
 import { REGRAS_PADRAO, type DadosConexaoNuvem, type PerfilConexao, type ResultadoTeste } from '@shared/tipos'
 import { formatarCnpj, soDigitos } from '@shared/numeros'
 import { useAviso, useConexoes, useSessao } from '../contexto'
-import { nuvem } from '../servicos'
+import { useAdmin } from '../admin'
 import { Icone } from '../componentes/Icone'
-import { Alerta, Modal } from '../componentes/Modal'
+import { Alerta } from '../componentes/Modal'
 
 const CORES = ['#1f5f9e', '#0e7c5a', '#7a3fb5', '#b4461b', '#a3122a', '#8a6100', '#0f6470', '#3d4a5c', '#b0306a', '#4b6b12']
 
 const vazio = (empresaId = ''): PerfilConexao => ({
   id: '', empresaId, cliente: '', nome: '', cor: CORES[0], servidor: '', instancia: '', porta: null, autenticacao: 'sql',
-  usuario: 'sa', temSenha: false, banco: '', driver: 'auto', criptografar: false, cnpjsEmpresa: [],
+  usuario: 'sa', temSenha: false, banco: '', driver: 'auto', criptografar: false, cnpjsEmpresa: [], ativo: true,
   regras: { ...REGRAS_PADRAO }, atualizadoEm: ''
 })
 
 export function Pagina_Conexoes() {
   const { perfis, locais, recarregar, ativa, selecionar, sincronizadoComNuvem } = useConexoes()
-  const { ehAdmin: admin, empresaAtual, internet } = useSessao()
+  const { empresaAtual, internet } = useSessao()
+  const adm = useAdmin()
+  const nuvem = adm.nuvem
+  const admin = !!nuvem // sem internet: só a senha deste computador
   const avisar = useAviso()
 
   const [form, setForm] = useState<PerfilConexao>(perfis[0] ?? vazio(empresaAtual?.id))
@@ -25,8 +28,6 @@ export function Pagina_Conexoes() {
   const [testando, setTestando] = useState(false)
   const [salvando, setSalvando] = useState(false)
   const [nativo, setNativo] = useState(true)
-  const [arquivo, setArquivo] = useState<'exportar' | 'importar' | null>(null)
-  const [senhaArquivo, setSenhaArquivo] = useState('')
   const [cnpjNovo, setCnpjNovo] = useState('')
 
   useEffect(() => {
@@ -76,7 +77,7 @@ export function Pagina_Conexoes() {
   /** Salva o cadastro na empresa (todos os PCs) e a senha só neste computador. */
   const salvar = async (p: PerfilConexao = form) => {
     if (!empresaAtual) return avisar('Escolha a empresa antes de cadastrar conexões.', 'erro')
-    if (!internet) return avisar('Sem internet: o cadastro de conexões é salvo na empresa e precisa de conexão.', 'erro')
+    if (!internet || !nuvem) return avisar('Sem internet: o cadastro de conexões é salvo na empresa e precisa de conexão.', 'erro')
     if (!p.cliente.trim() || !p.nome.trim() || !p.servidor.trim()) return avisar(`Preencha ${faltando || 'os dados da conexão'}.`, 'erro')
     setSalvando(true)
     try {
@@ -105,6 +106,7 @@ export function Pagina_Conexoes() {
       await window.api.conexoes.salvarSenha(form.id, senha)
       setSenha('')
       await recarregar()
+      void adm.registrar({ acao: 'salvou', entidade: 'conexão', descricao: `Senha do SQL de ${form.cliente} › ${form.nome} guardada neste computador` })
       avisar('Senha guardada neste computador.', 'ok')
     } catch (e) {
       avisar((e as Error).message, 'erro')
@@ -113,29 +115,13 @@ export function Pagina_Conexoes() {
 
   const excluir = async () => {
     if (!form.id || !confirm(`Excluir a conexão ${form.cliente} › ${form.nome} de todos os computadores de ${empresaAtual?.nome}?`)) return
+    if (!nuvem) return avisar('Sem internet: não é possível excluir agora.', 'erro')
     try {
       await nuvem.excluirConexao(form.id)
       await window.api.conexoes.excluir(form.id)
       await recarregar()
       setForm(vazio(empresaAtual?.id))
       avisar('Conexão excluída.', 'ok')
-    } catch (e) {
-      avisar((e as Error).message, 'erro')
-    }
-  }
-
-  const executarArquivo = async () => {
-    try {
-      if (arquivo === 'exportar') {
-        const ok = await window.api.conexoes.exportar([], senhaArquivo)
-        if (ok) avisar('Conexões exportadas. Guarde a senha do arquivo: ela será pedida na importação.', 'ok')
-      } else {
-        const n = await window.api.conexoes.importar(senhaArquivo)
-        await recarregar()
-        if (n) avisar(`${n} conexão(ões) importada(s).`, 'ok')
-      }
-      setArquivo(null)
-      setSenhaArquivo('')
     } catch (e) {
       avisar((e as Error).message, 'erro')
     }
@@ -152,8 +138,6 @@ export function Pagina_Conexoes() {
         </div>
         {admin && (
           <div className="acoes">
-            <button className="botao" onClick={() => setArquivo('importar')}><Icone nome="importar" /> Importar</button>
-            <button className="botao" onClick={() => setArquivo('exportar')} disabled={!perfis.length}><Icone nome="exportar" /> Exportar</button>
             <button className="botao primario" onClick={() => abrir(vazio(empresaAtual?.id))} disabled={!empresaAtual}><Icone nome="mais" /> Nova conexão</button>
           </div>
         )}
@@ -175,10 +159,10 @@ export function Pagina_Conexoes() {
             <div key={cliente}>
               <div className="cliente">{cliente}</div>
               {lista.map((p) => (
-                <button key={p.id} className={p.id === form.id ? 'atual' : ''} onClick={() => abrir(p)}>
+                <button key={p.id} className={p.id === form.id ? 'atual' : ''} onClick={() => abrir(p)} style={p.ativo === false ? { opacity: 0.6 } : undefined}>
                   <span className="cor" style={{ background: p.cor }} />
                   <span>
-                    <div style={{ fontWeight: 600 }}>{p.nome} {p.id === ativa?.id && <span className="etiqueta ok">em uso</span>} {p.autenticacao === 'sql' && !p.temSenha && <span className="etiqueta erro">sem senha</span>}</div>
+                    <div style={{ fontWeight: 600 }}>{p.nome} {p.id === ativa?.id && <span className="etiqueta ok">em uso</span>} {p.ativo === false ? <span className="etiqueta neutra">desativada</span> : p.autenticacao === 'sql' && !p.temSenha && <span className="etiqueta erro">sem senha</span>}</div>
                     <div className="linha2">{p.servidor}{p.instancia ? '\\' + p.instancia : ''} / {p.banco || 'sem banco'}</div>
                   </span>
                 </button>
@@ -251,6 +235,10 @@ export function Pagina_Conexoes() {
               </select>
             </label>
             <div className="campo c3"><span>&nbsp;</span><label className="check"><input type="checkbox" checked={form.criptografar} onChange={(e) => muda('criptografar', e.target.checked)} /> Criptografar conexão</label></div>
+            <div className="campo c12">
+              <label className="check"><input type="checkbox" checked={form.ativo !== false} onChange={(e) => muda('ativo', e.target.checked)} /> Conexão ativa</label>
+              <small>Desativada, ela some da escolha de banco na faixa superior e do pedido, mas o cadastro continua aqui.</small>
+            </div>
           </div>
 
           <div className="rodape-form">
@@ -299,7 +287,8 @@ export function Pagina_Conexoes() {
           <div className="rodape-form">
             {form.id && <button className="botao perigo" onClick={() => void excluir()}><Icone nome="lixo" /> Excluir</button>}
             <div className="direita">
-              {form.id && ativa?.id !== form.id && <button className="botao" onClick={() => selecionar(form.id)}>Usar esta conexão</button>}
+              {form.id && ativa?.id !== form.id && form.ativo !== false && <button className="botao" onClick={() => selecionar(form.id)}>Usar esta conexão</button>}
+              {form.id && admin && <button className="botao" onClick={() => void salvar({ ...form, ativo: form.ativo === false })} disabled={salvando}>{form.ativo === false ? 'Ativar' : 'Desativar'}</button>}
               <button className="botao primario" onClick={() => void salvar()} disabled={salvando || !internet}>{salvando ? <span className="spinner" /> : null} Salvar conexão</button>
             </div>
           </div>
@@ -307,16 +296,6 @@ export function Pagina_Conexoes() {
         </div>
       </div>
 
-      <Modal aberto={!!arquivo} aoFechar={() => setArquivo(null)} rotulo={arquivo === 'exportar' ? 'Exportar conexões' : 'Importar conexões'}
-        botoes={<><button className="botao" onClick={() => setArquivo(null)}>Cancelar</button><button className="botao primario" onClick={() => void executarArquivo()} disabled={senhaArquivo.length < 4}>{arquivo === 'exportar' ? 'Escolher onde salvar' : 'Escolher arquivo'}</button></>}>
-        <h2>{arquivo === 'exportar' ? 'Exportar conexões' : 'Importar conexões'}</h2>
-        <p className="fraco">
-          {arquivo === 'exportar'
-            ? 'Gera um arquivo com todas as conexões deste computador, inclusive as senhas, protegido pela senha abaixo. Use para instalar as mesmas conexões em outro PC.'
-            : 'Escolha um arquivo .gpvconn exportado de outro computador. Conexões com o mesmo identificador são atualizadas.'}
-        </p>
-        <label className="campo"><span>Senha do arquivo</span><input className="entrada" type="password" value={senhaArquivo} onChange={(e) => setSenhaArquivo(e.target.value)} autoFocus /></label>
-      </Modal>
     </div>
   )
 }

@@ -49,6 +49,7 @@ export interface PerfilConexao {
   driver: DriverSql
   criptografar: boolean
   cnpjsEmpresa: string[] // CNPJs da empresa dona do banco (alerta se o PDF for de outro fornecedor)
+  ativo: boolean // desativada: some do seletor da faixa superior e do pedido
   regras: RegrasConexao
   atualizadoEm: string
 }

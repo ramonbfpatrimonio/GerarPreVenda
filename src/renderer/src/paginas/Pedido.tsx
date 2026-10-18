@@ -66,7 +66,7 @@ const NOMES_FILTRO: Record<FiltroST, string> = { TODOS: 'todos os itens', ST: 's
 
 // ----------------------------------------------------------------- página
 export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
-  const { ativa, status, perfis, selecionar } = useConexoes()
+  const { ativa, status, ativos: perfis, selecionar } = useConexoes()
   const { perfil, empresaAtual, registrarNoHistorico, internet } = useSessao()
   const avisar = useAviso()
 
@@ -262,7 +262,7 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
     if (!est) return 'Abra um pedido.'
     if (!empresaAtual) return 'Escolha a empresa na faixa superior.'
     if (!ativa) return 'Selecione uma conexão na faixa superior.'
-    if (status.estado === 'sem-senha') return 'Informe a senha do SQL deste computador na aba Conexões.'
+    if (status.estado === 'sem-senha') return 'Falta a senha do SQL neste computador: peça a um administrador.'
     if (status.estado !== 'on') return 'Sem conexão com o banco.'
     if (resumo.pendentes > 0 || buscando) return 'Aguardando a busca dos produtos.'
     if (resumo.naoEncontrados > 0) return `${resumo.naoEncontrados} produto(s) não localizado(s) no ERP: corrija ou remova antes de gerar.`

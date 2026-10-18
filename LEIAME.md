@@ -18,7 +18,7 @@ de cada cliente (SQL Server) e grava a pré-venda — tudo numa única transaç�
 
 ### Projeto novo (uma vez)
 1. Crie um projeto em <https://supabase.com>.
-2. **SQL Editor** → rode `supabase/migrations/001_inicial.sql` e depois `supabase/migrations/002_empresas.sql`.
+2. **SQL Editor** → rode, nesta ordem, `001_inicial.sql`, `002_empresas.sql` e `003_eventos_aparencia.sql` (pasta `supabase/migrations`).
 3. **Database → Extensions** → habilite **pg_cron** e rode o `002_empresas.sql` de novo (agenda a limpeza automática do histórico).
 4. **Edge Functions → Deploy a new function → Via Editor**: nome `admin-usuarios`, cole `supabase/functions/admin-usuarios/index.ts`, **Deploy**.
 5. **Authentication → Sign In / Providers → Email**: desligue *Allow new users to sign up*.
@@ -27,13 +27,20 @@ de cada cliente (SQL Server) e grava a pré-venda — tudo numa única transaç�
    update public.perfis set papel = 'super_admin', nome = 'Ramon' where email = 'seu-email@exemplo.com';
    ```
 
+### Atualização da versão 1.1 para a 1.2 (área administrativa, eventos, aparência)
+1. **SQL Editor** → cole e rode `supabase/migrations/003_eventos_aparencia.sql` (pode rodar de novo sem problema).
+   Ele cria a tabela de **eventos do sistema**, a de **aparência** (papel de parede e logo) e os gatilhos que registram
+   sozinhos quem criou, alterou ou excluiu conexões, usuários, empresas, aparência e pré-vendas.
+2. A Edge Function não mudou: não precisa publicar de novo.
+3. Publique o instalador 1.2 (`npm run release`): os computadores atualizam sozinhos.
+
 ### Projeto que já estava rodando a versão 1.0 (atualização para várias empresas)
 1. **SQL Editor** → rode `supabase/migrations/002_empresas.sql`. Ele:
    - cria a empresa **Hage** e coloca nela todos os usuários e o histórico que já existem;
    - transforma o primeiro administrador (você) em **super administrador**.
 2. Habilite **pg_cron** (Database → Extensions) e rode o `002` mais uma vez.
 3. **Edge Functions → admin-usuarios**: substitua o código pelo novo `index.ts` e clique em **Deploy**.
-4. Instale a versão 1.1 do programa. Entre como super administrador, abra **Conexões** e clique em
+4. Instale a versão 1.1 do programa. Entre como super administrador, abra a área administrativa (Ctrl+Shift+B) → **Conexões** e clique em
    **Enviar para Hage** para subir as conexões que estavam só no seu computador.
 
 O endereço e a chave *anon* do Supabase já estão em `src/renderer/src/servicos/nuvem.ts`
@@ -44,11 +51,44 @@ A chave *anon* é pública por natureza; quem protege os dados são as regras RL
 
 ## Empresas, papéis e o que cada um vê
 
+Na tela, todo mundo vê só **Pedido** e **Histórico**. O resto fica oculto na **área administrativa**:
+
 | Papel | Vê e faz |
 |---|---|
-| **Super administrador** (você) | Todas as empresas: cria e bloqueia empresas, escolhe em qual empresa trabalhar na faixa do topo, vê o histórico de todas |
-| **Administrador da empresa** | Só a própria empresa: cria operadores, cadastra conexões |
-| **Operador** | Gera pré-vendas e vê o histórico da própria empresa; informa a senha do SQL no próprio computador |
+| **Super administrador** (você) | Todas as empresas: cria e bloqueia empresas, escolhe em qual empresa trabalhar na faixa do topo, vê histórico e eventos de todas |
+| **Administrador da empresa** | Só a própria empresa: conexões, usuários, eventos, backups e aparência |
+| **Operador** | Gera pré-vendas e vê o histórico da própria empresa. Não abre a área administrativa |
+
+### Área administrativa (Ctrl + Shift + B)
+- Em qualquer tela, aperte **Ctrl + Shift + B** e informe e-mail e senha de um administrador.
+- Aparecem as abas **Conexões, Usuários, Eventos do sistema, Backups, Aparência** (e **Empresas** para o super administrador).
+- É uma sessão separada: dá para abrir no computador de um operador sem desconectar ele; tudo o que for feito fica
+  registrado no nome do administrador. Fecha sozinha após **10 minutos sem uso** ou em **Fechar administração**.
+- Tentativas de operador ou senha errada ficam registradas nos eventos como **Negado**.
+
+### Conexões ativas e desativadas
+Em Conexões, desmarque **Conexão ativa** (ou clique em **Desativar**). Ela some da escolha de banco na faixa superior
+e do pedido em todos os computadores da empresa, mas o cadastro continua lá para reativar depois.
+
+### Eventos do sistema
+Lista quem **criou, alterou, excluiu, salvou, gerou, entrou, saiu, fez backup, restaurou**, com **dia, hora com
+segundos, estação (nome do computador) e usuário**. Filtros por período, ação, item e texto; **Exportar para Excel**.
+Clique numa linha para ver os detalhes (o que era antes e o que ficou). Os registros de conexões, usuários, empresas,
+aparência e pré-vendas são gravados pelo próprio banco (gatilhos), então não dependem do programa. Sem internet,
+os eventos ficam na fila junto com as pré-vendas. São apagados junto com o histórico (prazo da empresa).
+
+### Backups
+- **Este computador:** um backup automático por dia ao abrir o programa em `Documentos\Gerar Pre-Venda\Backups`
+  (conexões com as senhas do SQL cifradas, fila sem internet e aparência). Ficam os 30 mais recentes.
+  **Restaurar** faz antes um backup do estado atual. As senhas só abrem no mesmo usuário do Windows.
+- **Empresa na nuvem:** baixa um `.json` com usuários, conexões, histórico, eventos e aparência (sem senhas).
+- **Senhas do SQL para outro computador:** Exportar/Importar conexões (arquivo protegido por senha).
+
+### Aparência (papel de parede e logo do cliente)
+Em **Aparência**, importe o papel de parede (ocupa 3/4 da tela de login, à esquerda; ideal 1920×1080) e a logo do
+cliente (PNG transparente). As imagens são reduzidas sozinhas, guardadas na empresa e copiadas para cada computador,
+então aparecem no login mesmo antes de entrar ou sem internet. A logo também vai para a barra superior.
+Ícone do programa, da área de trabalho e a imagem lateral do instalador ficam em `build/` e `resources/`.
 
 A separação é feita **pelo banco** (RLS), não só pela tela: mesmo com o programa modificado, uma empresa
 não lê nem grava dados de outra. Os testes estão em `tests/sql/` (rodam num PostgreSQL comum:
@@ -167,7 +207,7 @@ Em **CNPJ da empresa deste banco**, informe o CNPJ do fornecedor (ex.: Hage 39.6
 o programa sugere a conexão certa ao abrir o PDF e avisa se você estiver em outra.
 
 As senhas dos bancos **não vão para a nuvem**: ficam cifradas pelo Windows neste computador.
-Use **Exportar/Importar** para levar as conexões a outro PC (arquivo protegido por senha).
+Em **Backups**, use **Exportar/Importar conexões** para levar as conexões a outro PC (arquivo protegido por senha).
 
 ---
 

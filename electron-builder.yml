@@ -21,6 +21,11 @@ win:
   artifactName: GerarPreVenda-Setup-${version}.${ext}
 nsis:
   oneClick: false
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
+  installerSidebar: build/installerSidebar.bmp
+  uninstallerSidebar: build/uninstallerSidebar.bmp
   perMachine: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: always

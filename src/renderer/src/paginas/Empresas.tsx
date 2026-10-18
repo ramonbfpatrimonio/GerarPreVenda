@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { formatarCnpj, moeda, soDigitos } from '@shared/numeros'
-import { nuvem, type Empresa } from '../servicos'
+import { type Empresa } from '../servicos'
+import { useAdmin } from '../admin'
 import { useAviso, useSessao } from '../contexto'
 import { Icone } from '../componentes/Icone'
 import { Alerta, Modal } from '../componentes/Modal'
@@ -8,7 +9,20 @@ import { Alerta, Modal } from '../componentes/Modal'
 const vazio = { nome: '', cnpj: '', admin_nome: '', admin_email: '', admin_senha: '' }
 
 export function Pagina_Empresas({ visivel, irParaPedido }: { visivel: boolean; irParaPedido: () => void }) {
-  const { empresas, recarregarEmpresas, escolherEmpresa, empresaAtual, internet } = useSessao()
+  const { recarregarEmpresas: recarregarSessao, escolherEmpresa, empresaAtual, internet: net, ehSuper: sessaoSuper } = useSessao()
+  const adm = useAdmin()
+  const nuvem = adm.nuvem
+  const internet = net && !!nuvem
+  const [empresas, setEmpresas] = useState<Empresa[]>([])
+  const recarregarEmpresas = async () => {
+    if (!nuvem) return
+    try {
+      setEmpresas(await nuvem.empresas())
+      if (sessaoSuper) void recarregarSessao()
+    } catch (e) {
+      avisar((e as Error).message, 'erro')
+    }
+  }
   const avisar = useAviso()
   const [nova, setNova] = useState(false)
   const [dados, setDados] = useState(vazio)
@@ -20,14 +34,16 @@ export function Pagina_Empresas({ visivel, irParaPedido }: { visivel: boolean; i
   }, [visivel]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const criar = async () => {
+    if (!nuvem) return
     setSalvando(true)
     try {
       const id = await nuvem.criarEmpresa(dados)
+      void adm.registrar({ acao: 'criou', entidade: 'empresa', descricao: `Criou a empresa ${dados.nome} com o administrador ${dados.admin_email}` })
       avisar(`Empresa ${dados.nome} criada. O administrador já pode entrar com ${dados.admin_email}.`, 'ok')
       setNova(false)
       setDados(vazio)
       await recarregarEmpresas()
-      escolherEmpresa(id)
+      if (sessaoSuper) escolherEmpresa(id)
     } catch (e) {
       avisar((e as Error).message, 'erro')
     } finally {
@@ -36,6 +52,7 @@ export function Pagina_Empresas({ visivel, irParaPedido }: { visivel: boolean; i
   }
 
   const alterar = async (e: Empresa, d: Partial<Empresa>) => {
+    if (!nuvem) return
     try {
       await nuvem.alterarEmpresa(e.id, d)
       await recarregarEmpresas()
@@ -89,7 +106,7 @@ export function Pagina_Empresas({ visivel, irParaPedido }: { visivel: boolean; i
                 <td>{e.retencao_meses} meses</td>
                 <td>{e.ativa ? <span className="etiqueta ok">Ativa</span> : <span className="etiqueta erro">Bloqueada</span>}</td>
                 <td style={{ textAlign: 'right' }}>
-                  <button className="botao leve" onClick={() => { escolherEmpresa(e.id); irParaPedido() }}>Trabalhar nesta</button>
+                  {sessaoSuper && <button className="botao leve" onClick={() => { escolherEmpresa(e.id); irParaPedido() }}>Trabalhar nesta</button>}
                   <button className="botao leve" onClick={() => setEditando({ ...e })}>Editar</button>
                   <button className={`botao leve ${e.ativa ? 'perigo' : ''}`}
                     onClick={() => (e.ativa ? confirm(`Bloquear ${e.nome}? Os usuários dela não conseguirão entrar nem gerar pré-vendas.`) : true) && void alterar(e, { ativa: !e.ativa })}>

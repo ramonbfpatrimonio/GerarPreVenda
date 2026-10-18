@@ -5,7 +5,8 @@
 import type { Api, RegistroFila } from '../../../preload/api'
 import type { DadosConexaoNuvem, PerfilConexao, ProdutoErp, ResultadoPdf } from '@shared/tipos'
 import { REGRAS_PADRAO } from '@shared/tipos'
-import type { Empresa, Nuvem, Perfil, RegistroHistorico } from './nuvem'
+import type { Empresa, Evento, NovoEvento, Nuvem, Perfil, RegistroHistorico } from './nuvem'
+import type { AparenciaLocal, InfoBackup } from '../../../preload/api'
 import pedidosDemo from './demo-pedidos.json'
 
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -23,13 +24,14 @@ const empresas: Empresa[] = [
 const base = (o: Partial<PerfilConexao>): PerfilConexao => ({
   id: '', empresaId: HAGE, cliente: 'Hage', nome: '', cor: '#1f5f9e', servidor: 'THIAGO-DELL', instancia: '', porta: null,
   autenticacao: 'sql', usuario: 'sa', temSenha: true, banco: '', driver: 'auto', criptografar: false,
-  cnpjsEmpresa: [], regras: { ...REGRAS_PADRAO }, atualizadoEm: new Date().toISOString(), ...o
+  cnpjsEmpresa: [], regras: { ...REGRAS_PADRAO }, atualizadoEm: new Date().toISOString(), ativo: true, ...o
 })
 
 // "Nuvem": cadastro das conexões por empresa (sem senha)
 const conexoesNuvem: { id: string; empresa_id: string; dados: DadosConexaoNuvem }[] = [
   base({ id: 'hage-com', nome: 'COMERCIO', banco: 'Hage.0001.Log', cnpjsEmpresa: ['39648061000103'] }),
   base({ id: 'hage-ind', nome: 'INDUSTRIA', cor: '#7a3fb5', banco: 'Hage.0002.Log' }),
+  base({ id: 'hage-teste', nome: 'TESTE (homologação)', cor: '#8a8f98', banco: 'Hage.Teste', ativo: false }),
   base({ id: 'norte-mat', empresaId: NORTE, cliente: 'Distribuidora Norte', nome: 'Matriz', cor: '#0e7c5a', servidor: 'localhost', instancia: 'SQLEXPRESS', autenticacao: 'windows', usuario: '', banco: 'NorteERP' })
 ].map(({ temSenha: _t, atualizadoEm: _a, ...dados }) => ({ id: dados.id, empresa_id: dados.empresaId, dados }))
 
@@ -82,6 +84,37 @@ const historico: RegistroHistorico[] = [
   }
 ]
 const fila: RegistroFila[] = []
+
+const novoBackup = (automatico: boolean, diasAtras: number): InfoBackup => {
+  const d = new Date(Date.now() - diasAtras * 86400000)
+  return { nome: d.toISOString().replace(/[:.]/g, '-').slice(0, 19) + (automatico ? '-auto' : ''), criadoEm: d.toISOString(), automatico, arquivos: ['conexoes.json', 'fila-historico.dat', 'aparencia.json'], tamanho: 4812 + diasAtras * 37 }
+}
+const backups: InfoBackup[] = [0, 1, 2, 3, 5].map((d) => novoBackup(true, d))
+let aparenciaLocal: AparenciaLocal | null = null
+const aparenciaNuvem = new Map<string, { fundo: string | null; logo: string | null; atualizado_em: string }>()
+
+let idEvento = 1
+const eventos: Evento[] = []
+const semente = (min: number, empresa: string, usuario: string, estacao: string, acao: string, entidade: string, descricao: string) =>
+  eventos.push({ id: idEvento++, criado_em: new Date(Date.now() - min * 60000 - 17000).toISOString(), empresa_id: empresa, usuario_nome: usuario, estacao, acao, entidade, descricao, detalhes: {} })
+semente(3200, HAGE, 'Ramon', 'RAMON-NOTE', 'criou', 'conexão', 'Criou a conexão Hage › INDUSTRIA')
+semente(2890, HAGE, 'Deyse', 'CAIXA-02', 'gerou', 'pré-venda', 'Pré-venda 000410/2026 · SUPERMERCADOS DB LTDA · pedido 132270- 001 · R$ 9.911,02')
+semente(1500, HAGE, 'Deyse', 'CAIXA-02', 'alterou', 'usuário', 'Alterou o usuário Thiago: desativado')
+semente(1440, HAGE, 'Mateus', 'VENDAS-01', 'gerou', 'pré-venda', 'Pré-venda 000411/2026 · SUPERMERCADOS DB LTDA · pedido 153331- 029 · R$ 2.261,86')
+semente(600, HAGE, 'Ramon', 'RAMON-NOTE', 'alterou', 'conexão', 'Alterou a conexão Hage › TESTE (homologação): desativada')
+eventos[4].detalhes = { antes: { ativo: true }, depois: { ativo: false } }
+semente(95, HAGE, 'Mateus', 'VENDAS-01', 'entrou', 'sessão', 'Entrou no programa')
+semente(40, HAGE, 'Mateus', 'VENDAS-01', 'negou', 'área administrativa', 'Acesso negado para mateus@hage.com: este usuário não é administrador')
+semente(4300, NORTE, 'Carla', 'NORTE-01', 'gerou', 'pré-venda', 'Pré-venda 000087/2026 · MERCADINHO BOA ESPERANÇA · pedido A-7781 · R$ 3.480,00')
+eventos.sort((a, b) => b.criado_em.localeCompare(a.criado_em))
+const registrar = (quem: Perfil | null, e: NovoEvento) => {
+  if (!quem) return
+  if (e.chave_local && eventos.some((x) => (x.detalhes as { chave?: string }).chave === e.chave_local)) return
+  eventos.unshift({
+    id: idEvento++, criado_em: e.criado_em ?? new Date().toISOString(), empresa_id: (quem.papel === 'super_admin' ? e.empresa_id : quem.empresa_id) ?? HAGE,
+    usuario_nome: quem.nome, estacao: 'VENDAS-01', acao: e.acao, entidade: e.entidade, descricao: e.descricao ?? '', detalhes: { ...(e.detalhes ?? {}), ...(e.chave_local ? { chave: e.chave_local } : {}) }
+  })
+}
 
 export function instalarApiDemo() {
   const api: Api = {
@@ -164,10 +197,32 @@ export function instalarApiDemo() {
       }
     },
     sistema: { estacao: async () => 'VENDAS-01' },
+    backup: {
+      listar: async () => [...backups],
+      fazer: async () => {
+        const b = novoBackup(false, 0)
+        backups.unshift(b)
+        return b
+      },
+      restaurar: async () => ['conexoes.json', 'fila-historico.dat', 'aparencia.json'],
+      abrirPasta: async () => undefined,
+      pasta: async () => 'C:\\Users\\vendas\\Documents\\Gerar Pre-Venda\\Backups',
+      salvarArquivo: async (nome) => `C:\\Users\\vendas\\Downloads\\${nome}`
+    },
+    aparencia: {
+      ler: async () => aparenciaLocal,
+      salvar: async (a) => {
+        aparenciaLocal = a
+      }
+    },
     offline: {
       lembrar: async () => undefined,
       atualizarPerfil: async () => undefined,
-      entrar: async () => perfilAtual(),
+      entrar: async (email: string) => {
+        const u = usuarios.find((x) => x.email === email.trim())
+        if (!u) throw new Error('E-mail ou senha incorretos.')
+        return u
+      },
       perfilPorId: async () => perfilAtual(),
       esquecer: async () => undefined
     },
@@ -183,7 +238,7 @@ export function instalarApiDemo() {
       }
     },
     atualizacao: {
-      versao: async () => '1.1.0',
+      versao: async () => '1.2.0',
       instalar: async () => undefined,
       verificar: async () => ({ ok: true }),
       aoMudar: () => () => undefined
@@ -205,9 +260,9 @@ const ouvintes = new Set<(l: boolean) => void>()
 const redeOk = () => {
   if (semInternet) throw new Error('Sem conexão com a internet.')
 }
-const minhaEmpresa = () => perfilAtual().empresa_id
 
-export const nuvemDemo: Nuvem = {
+function fabricarDemo(quem: () => Perfil | null): Nuvem {
+  return {
   configurada: true,
   async entrar(email, senha) {
     await espera(300)
@@ -237,13 +292,14 @@ export const nuvemDemo: Nuvem = {
   async registrarPreVenda(r) {
     redeOk()
     if (r.chave_local && historico.some((h) => h.chave_local === r.chave_local)) return
-    const empresa_id = perfilAtual().papel === 'super_admin' ? r.empresa_id : minhaEmpresa() ?? undefined
+    const empresa_id = quem()?.papel === 'super_admin' ? r.empresa_id : quem()?.empresa_id ?? undefined
     historico.unshift({ ...r, empresa_id, id: historico.length + 1, criado_em: r.criado_em ?? new Date().toISOString() })
+    registrar(quem(), { acao: 'gerou', entidade: 'pré-venda', descricao: `Pré-venda ${r.numero}/${r.ano} · ${r.cliente_nome} · pedido ${r.pedido_compra}`, empresa_id })
   },
   async historico({ texto, empresaId }) {
     redeOk()
     const t = (texto ?? '').toLowerCase()
-    const meu = perfilAtual().papel === 'super_admin' ? null : minhaEmpresa()
+    const meu = quem()?.papel === 'super_admin' ? null : quem()?.empresa_id
     return historico
       .filter((h) => (!meu || h.empresa_id === meu) && (!empresaId || h.empresa_id === empresaId))
       .filter((h) => !t || JSON.stringify(h).toLowerCase().includes(t))
@@ -264,6 +320,7 @@ export const nuvemDemo: Nuvem = {
   async alterarUsuario(id, d) {
     const u = usuarios.find((x) => x.id === id)
     if (u) Object.assign(u, d)
+    if (u) registrar(quem(), { acao: 'alterou', entidade: 'usuário', descricao: `Alterou o usuário ${u.nome}: ${Object.entries(d).map(([k, v]) => `${k} = ${v}`).join(', ')}`, empresa_id: u.empresa_id })
   },
   async trocarSenha() {
     await espera(300)
@@ -290,11 +347,75 @@ export const nuvemDemo: Nuvem = {
     redeOk()
     const i = conexoesNuvem.findIndex((c) => c.id === dados.id)
     const reg = { id: dados.id, empresa_id: empresaId, dados: { ...dados, empresaId } }
+    const antes = i >= 0 ? conexoesNuvem[i].dados : null
     if (i >= 0) conexoesNuvem[i] = reg
     else conexoesNuvem.push(reg)
+    const desc = !antes ? 'Criou' : antes.ativo !== false && dados.ativo === false ? 'Desativou' : antes.ativo === false && dados.ativo !== false ? 'Ativou' : 'Alterou'
+    registrar(quem(), { acao: antes ? 'alterou' : 'criou', entidade: 'conexão', descricao: `${desc} a conexão ${dados.cliente} › ${dados.nome}`, empresa_id: empresaId })
   },
   async excluirConexao(id) {
     const i = conexoesNuvem.findIndex((c) => c.id === id)
+    if (i >= 0) registrar(quem(), { acao: 'excluiu', entidade: 'conexão', descricao: `Excluiu a conexão ${conexoesNuvem[i].dados.cliente} › ${conexoesNuvem[i].dados.nome}`, empresa_id: conexoesNuvem[i].empresa_id })
     if (i >= 0) conexoesNuvem.splice(i, 1)
+  }
+  ,
+  async registrarEvento(e) {
+    redeOk()
+    registrar(quem(), e)
+  },
+  async eventos({ desde, texto, acao, entidade, empresaId }) {
+    redeOk()
+    await espera(200)
+    const eu = quem()
+    const t = (texto ?? '').toLowerCase()
+    return eventos
+      .filter((e) => (eu?.papel === 'super_admin' || e.empresa_id === eu?.empresa_id) && (!empresaId || e.empresa_id === empresaId))
+      .filter((e) => (!desde || e.criado_em >= desde) && (!acao || e.acao === acao) && (!entidade || e.entidade === entidade))
+      .filter((e) => !t || `${e.descricao} ${e.usuario_nome} ${e.estacao}`.toLowerCase().includes(t))
+      .map((e) => ({ ...e, empresas: { nome: empresas.find((x) => x.id === e.empresa_id)?.nome ?? '' } }))
+  },
+  async aparencia(empresaId) {
+    redeOk()
+    return aparenciaNuvem.get(empresaId) ?? null
+  },
+  async salvarAparencia(empresaId, a) {
+    redeOk()
+    aparenciaNuvem.set(empresaId, { ...a, atualizado_em: new Date().toISOString() })
+    registrar(quem(), { acao: 'alterou', entidade: 'aparência', descricao: `Alterou a aparência: ${a.fundo ? 'papel de parede próprio' : 'papel de parede padrão'}, ${a.logo ? 'logo própria' : 'logo padrão'}`, empresa_id: empresaId })
+  },
+  async backupEmpresa(empresaId) {
+    redeOk()
+    await espera(500)
+    return { formato: 'gerar-pre-venda/backup-empresa', versao: 1, empresa: empresas.find((e) => e.id === empresaId), historico: historico.filter((h) => h.empresa_id === empresaId) }
+  }
+  }
+}
+
+export const nuvemDemo: Nuvem = fabricarDemo(() => (logado ? perfilAtual() : null))
+
+/** Sessão separada da área administrativa (Ctrl+Shift+B). Senha de demonstração: qualquer uma com 3+ letras. */
+export function criarNuvemAdminDemo(): Nuvem {
+  let eu: Perfil | null = null
+  const n = fabricarDemo(() => eu)
+  return {
+    ...n,
+    async entrar(email, senha) {
+      await espera(300)
+      redeOk()
+      const u = usuarios.find((x) => x.email === email.trim())
+      if (!u || senha.length < 3) throw new Error('E-mail ou senha incorretos.')
+      eu = u
+    },
+    async sair() {
+      eu = null
+    },
+    async usuarioAtualId() {
+      return eu?.id ?? null
+    },
+    aoMudarSessao: () => () => undefined,
+    async meuPerfil() {
+      redeOk()
+      return eu
+    }
   }
 }

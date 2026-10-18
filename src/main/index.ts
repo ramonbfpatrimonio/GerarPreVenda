@@ -3,6 +3,7 @@ import { join } from 'path'
 import { registrarIpc } from './ipc'
 import { configurarAtualizacao } from './atualizacao'
 import { fecharTodos } from './db'
+import { backupDiario } from './backup'
 
 let janela: BrowserWindow | null = null
 
@@ -16,7 +17,7 @@ function criarJanela() {
     autoHideMenuBar: true,
     title: 'Gerar Pré-Venda',
     backgroundColor: '#f4f5f7',
-    icon: join(__dirname, '../../resources/icon.png'),
+    icon: join(__dirname, '../../resources', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -60,6 +61,7 @@ if (!app.requestSingleInstanceLock()) {
     registrarIpc(() => janela)
     configurarAtualizacao(() => janela)
     criarJanela()
+    setTimeout(() => void backupDiario(), 8000)
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) criarJanela()
     })

@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { useConexoes, useSessao } from '../contexto'
+import { useAdmin } from '../admin'
+import logoPadrao from '../assets/logo.png'
 import type { EstadoAtualizacao } from '../../../preload/api'
 import { Icone } from './Icone'
 
 /** Faixa superior na cor da conexão ativa: mostra empresa, banco, internet e usuário. */
 export function Faixa({ irPara }: { irPara: (aba: 'conexoes' | 'empresas') => void }) {
-  const { perfis, ativa, status, selecionar, verificar } = useConexoes()
-  const { perfil, sair, empresaAtual, empresas, escolherEmpresa, ehSuper, ehAdmin, internet, offline, pendentes } = useSessao()
+  const { ativos: perfis, ativa, status, selecionar, verificar } = useConexoes()
+  const { perfil, sair, empresaAtual, empresas, escolherEmpresa, ehSuper, internet, offline, pendentes, aparencia } = useSessao()
+  const admin = useAdmin()
   const [menu, setMenu] = useState<'banco' | 'empresa' | null>(null)
   const [atualizacao, setAtualizacao] = useState<EstadoAtualizacao | null>(null)
   const ref = useRef<HTMLDivElement>(null)
@@ -23,11 +26,14 @@ export function Faixa({ irPara }: { irPara: (aba: 'conexoes' | 'empresas') => vo
   const sub =
     status.estado === 'on' ? `${ativa?.servidor}${ativa?.instancia ? '\\' + ativa.instancia : ''} / ${ativa?.banco}` :
     status.estado === 'off' ? 'Sem conexão com o banco: clique para trocar ou testar' :
-    status.estado === 'sem-senha' ? 'Falta a senha do SQL neste computador' :
+    status.estado === 'sem-senha' ? 'Falta a senha do SQL neste computador (peça ao administrador)' :
     status.estado === 'verificando' ? 'Conectando…' : 'Escolha em qual banco trabalhar'
 
   return (
     <header className="faixa" ref={ref}>
+      {aparencia?.empresaId === empresaAtual?.id && aparencia?.logo
+        ? <img className="logo-faixa propria" src={aparencia.logo} alt={empresaAtual?.nome ?? ''} />
+        : <img className="logo-faixa" src={logoPadrao} alt="" />}
       {ehSuper ? (
         <button className="seletor-empresa" onClick={() => setMenu((m) => (m === 'empresa' ? null : 'empresa'))} aria-haspopup="menu" aria-expanded={menu === 'empresa'}>
           <small>Empresa</small>
@@ -57,9 +63,11 @@ export function Faixa({ irPara }: { irPara: (aba: 'conexoes' | 'empresas') => vo
             </button>
           ))}
           {empresas.length === 0 && <div className="grupo">{offline ? 'Sem internet: lista indisponível.' : 'Nenhuma empresa cadastrada.'}</div>}
-          <div style={{ borderTop: '1px solid var(--linha)', marginTop: 6, paddingTop: 6 }}>
-            <button onClick={() => { irPara('empresas'); setMenu(null) }}><Icone nome="empresa" tamanho={16} /> Gerenciar empresas</button>
-          </div>
+          {admin.ehSuper && (
+            <div style={{ borderTop: '1px solid var(--linha)', marginTop: 6, paddingTop: 6 }}>
+              <button onClick={() => { irPara('empresas'); setMenu(null) }}><Icone nome="empresa" tamanho={16} /> Gerenciar empresas</button>
+            </div>
+          )}
         </div>
       )}
 
@@ -82,12 +90,18 @@ export function Faixa({ irPara }: { irPara: (aba: 'conexoes' | 'empresas') => vo
           {perfis.length === 0 && <div className="grupo">Nenhuma conexão cadastrada para {empresaAtual?.nome ?? 'esta empresa'}.</div>}
           <div style={{ borderTop: '1px solid var(--linha)', marginTop: 6, paddingTop: 6 }}>
             {ativa && <button onClick={() => { verificar(); setMenu(null) }}><Icone nome="atualizar" tamanho={16} /> Testar a conexão de novo</button>}
-            <button onClick={() => { irPara('conexoes'); setMenu(null) }}><Icone nome="banco" tamanho={16} /> {ehAdmin ? 'Gerenciar conexões' : 'Ver conexões e senha deste PC'}</button>
+            {admin.perfil && <button onClick={() => { irPara('conexoes'); setMenu(null) }}><Icone nome="banco" tamanho={16} /> Gerenciar conexões</button>}
           </div>
         </div>
       )}
 
       <span className="espaco" />
+      {admin.perfil && (
+        <span className="selo-admin" title="Área administrativa liberada (Ctrl+Shift+B). Fecha sozinha após 10 minutos sem uso.">
+          Administração: {admin.perfil.nome}{admin.nuvem ? '' : ' (sem internet)'}
+          <button onClick={() => admin.fechar()}>Fechar</button>
+        </span>
+      )}
       {!internet && (
         <span className="selo-offline" title={offline ? 'Entrou com o acesso guardado neste computador. A geração de pré-vendas continua normal.' : 'Sem internet no momento.'}>
           Sem internet{pendentes ? ` · ${pendentes} aguardando envio` : ''}
