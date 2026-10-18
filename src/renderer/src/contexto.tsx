@@ -81,6 +81,7 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
   const [empresas, setEmpresas] = useState<Empresa[]>([])
+  const [empresasDaNuvem, setEmpresasDaNuvem] = useState(false) // lista já veio da nuvem nesta sessão
   const [empresaEscolhida, setEmpresaEscolhida] = useState(lerLocal(CHAVE_EMPRESA))
   const [pendentes, setPendentes] = useState(0)
   const enviando = useRef(false)
@@ -247,7 +248,16 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
   const recarregarEmpresas = useCallback(async () => {
     if (!ehSuper || offline) return
     try {
-      setEmpresas(await nuvem.empresas())
+      const lista = await nuvem.empresas()
+      setEmpresas(lista)
+      setEmpresasDaNuvem(true)
+      // empresa lembrada que não existe mais (apagada/limpa): esquece
+      const lembrada = lerLocal(CHAVE_EMPRESA)
+      if (lembrada && !lista.some((x) => x.id === lembrada)) {
+        gravarLocal(CHAVE_EMPRESA, '')
+        gravarLocal(CHAVE_EMPRESA + ':nome', '')
+        setEmpresaEscolhida(lista[0]?.id ?? '')
+      }
     } catch (e) {
       if (!ehErroDeRede(e)) avisar((e as Error).message, 'erro')
     }
@@ -261,9 +271,11 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
     if (!ehSuper) return perfil.empresa_id ? { id: perfil.empresa_id, nome: perfil.empresa_nome } : null
     const e = empresas.find((x) => x.id === empresaEscolhida) ?? empresas[0]
     if (e) return { id: e.id, nome: e.nome }
-    // offline: lembra a última escolhida
+    // com a lista da nuvem em mãos, empresa que não está nela não existe mais
+    if (empresasDaNuvem) return null
+    // sem internet: lembra a última escolhida
     return empresaEscolhida ? { id: empresaEscolhida, nome: lerLocal(CHAVE_EMPRESA + ':nome') || 'Empresa' } : null
-  }, [perfil, ehSuper, empresas, empresaEscolhida])
+  }, [perfil, ehSuper, empresas, empresaEscolhida, empresasDaNuvem])
 
   const escolherEmpresa = useCallback(
     (id: string) => {

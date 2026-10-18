@@ -37,7 +37,7 @@ export function Faixa({ irPara }: { irPara: (aba: 'conexoes' | 'empresas') => vo
       {ehSuper ? (
         <button className="seletor-empresa" onClick={() => setMenu((m) => (m === 'empresa' ? null : 'empresa'))} aria-haspopup="menu" aria-expanded={menu === 'empresa'}>
           <small>Empresa</small>
-          <span>{empresaAtual?.nome ?? 'Escolha a empresa'} <Icone nome="seta" tamanho={14} /></span>
+          <span>{empresaAtual?.nome ?? (empresas.length ? 'Escolha a empresa' : 'Nenhuma empresa')} <Icone nome="seta" tamanho={14} /></span>
         </button>
       ) : (
         <div className="seletor-empresa fixo"><small>Empresa</small><span>{empresaAtual?.nome ?? '—'}</span></div>

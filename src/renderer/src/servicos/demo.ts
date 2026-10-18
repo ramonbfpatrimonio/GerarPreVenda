@@ -21,6 +21,8 @@ const empresas: Empresa[] = [
   { id: NORTE, nome: 'Distribuidora Norte', cnpj: '11222333000181', ativa: true, retencao_meses: 24, usuarios: 2, prevendas_mes: 12, total_mes: 31877.1, ultima_atividade: new Date(Date.now() - 86400000 * 2).toISOString() }
 ]
 
+if (params.has('vazio')) empresas.length = 0 // ?vazio: banco da nuvem zerado
+
 const base = (o: Partial<PerfilConexao>): PerfilConexao => ({
   id: '', empresaId: HAGE, cliente: 'Hage', nome: '', cor: '#1f5f9e', servidor: 'THIAGO-DELL', instancia: '', porta: null,
   autenticacao: 'sql', usuario: 'sa', temSenha: true, banco: '', driver: 'auto', criptografar: false,
