@@ -161,6 +161,11 @@ function traduzir(msg: string): string {
   if (/Failed to fetch|NetworkError|fetch failed|Load failed/i.test(msg)) return MSG_SEM_INTERNET
   if (/already been registered|already registered/i.test(msg)) return 'Já existe um usuário com este e-mail.'
   if (/row-level security|permission denied/i.test(msg)) return 'Sem permissão para esta operação.'
+  const falta = msg.match(/Could not find the (?:table|function) '?public\.(\w+)/i)
+  if (falta) {
+    const arquivo = /evento/i.test(falta[1]) ? '003_eventos.sql' : /empresa|conexoes_empresa|resumo/i.test(falta[1]) ? '002_empresas.sql' : '001_inicial.sql'
+    return `O banco na nuvem ainda não foi atualizado (falta "${falta[1]}"). No Supabase, abra o SQL Editor e rode supabase/migrations/${arquivo}.`
+  }
   return msg
 }
 
