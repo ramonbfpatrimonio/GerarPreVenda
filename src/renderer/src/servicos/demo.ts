@@ -222,7 +222,7 @@ export function instalarApiDemo() {
       }
     },
     atualizacao: {
-      versao: async () => '1.2.0',
+      versao: async () => '1.2.1',
       instalar: async () => undefined,
       verificar: async () => ({ ok: true }),
       aoMudar: () => () => undefined
