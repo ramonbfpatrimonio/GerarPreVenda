@@ -160,7 +160,7 @@ export function Pagina_Conexoes() {
     <div className="pagina">
       <div className="cabecalho-pagina">
         <div>
-          <h1>Conexões de {empresaAtual?.nome ?? '—'}</h1>
+          <h1>{empresaAtual ? `Conexões de ${empresaAtual.nome}` : 'Conexões'}</h1>
           <p className="fraco">O cadastro vale para todos os computadores da empresa. A senha do SQL fica só neste computador, protegida pelo Windows.</p>
         </div>
         {admin && (
@@ -173,7 +173,16 @@ export function Pagina_Conexoes() {
       </div>
 
       {!admin && <div style={{ marginBottom: 14 }}><Alerta tipo="aviso">Somente administradores alteram o cadastro das conexões. Você pode escolher a conexão na faixa superior e informar a senha do SQL deste computador.</Alerta></div>}
-      {!sincronizadoComNuvem && <div style={{ marginBottom: 14 }}><Alerta tipo="aviso">Sem internet: mostrando a cópia das conexões guardada neste computador.</Alerta></div>}
+      {!empresaAtual && (
+        <div style={{ marginBottom: 14 }}>
+          <Alerta tipo="aviso">{adm.ehSuper ? 'Nenhuma empresa escolhida. Cadastre uma em Empresas (ou escolha na faixa superior) para criar as conexões dela.' : 'Seu usuário não está ligado a nenhuma empresa.'}</Alerta>
+        </div>
+      )}
+      {empresaAtual && !sincronizadoComNuvem && (
+        <div style={{ marginBottom: 14 }}>
+          <Alerta tipo="aviso">{internet ? 'Conectando à nuvem… por enquanto mostrando a cópia das conexões guardada neste computador.' : 'Sem internet: mostrando a cópia das conexões guardada neste computador.'}</Alerta>
+        </div>
+      )}
       {admin && locais.length > 0 && (
         <div style={{ marginBottom: 14 }}>
           <Alerta tipo="aviso" acoes={<button className="botao" disabled={!internet || salvando} onClick={async () => { for (const p of locais) await salvar({ ...p, empresaId: empresaAtual?.id ?? '' }) }}>Enviar para {empresaAtual?.nome}</button>}>
@@ -198,7 +207,7 @@ export function Pagina_Conexoes() {
               ))}
             </div>
           ))}
-          {perfis.length === 0 && <p className="fraco" style={{ padding: 12 }}>Nenhuma conexão em {empresaAtual?.nome ?? 'esta empresa'} ainda.{admin ? ' Crie a primeira com o banco do ERP.' : ''}</p>}
+          {perfis.length === 0 && <p className="fraco" style={{ padding: 12 }}>{empresaAtual ? `Nenhuma conexão em ${empresaAtual.nome} ainda.` : 'Nenhuma conexão ainda.'}{admin ? ' Crie a primeira com o banco do ERP.' : ''}</p>}
         </div>
 
         <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
