@@ -3,6 +3,7 @@ import { basename } from 'path'
 import { readFile } from 'fs/promises'
 import type { ResultadoPdf } from '@shared/tipos'
 import { lerPedidosBluesoft, type PaginaPdf } from '@shared/pdf/bluesoft'
+import { ehPedido210, lerPedidos210 } from '@shared/pdf/pedido210'
 
 type PdfJs = typeof import('pdfjs-dist/legacy/build/pdf.mjs')
 let pdfjsCache: PdfJs | null = null
@@ -40,10 +41,16 @@ export async function extrairPaginas(dados: Uint8Array): Promise<PaginaPdf[]> {
 export async function lerPdf(caminho: string): Promise<ResultadoPdf> {
   const buf = await readFile(caminho)
   const paginas = await extrairPaginas(new Uint8Array(buf))
-  const r = lerPedidosBluesoft(paginas, basename(caminho))
+  return lerPaginas(paginas, basename(caminho))
+}
+
+/** Escolhe o leitor pelo layout do PDF. */
+export function lerPaginas(paginas: PaginaPdf[], arquivo: string): ResultadoPdf {
+  if (ehPedido210(paginas)) return lerPedidos210(paginas, arquivo)
+  const r = lerPedidosBluesoft(paginas, arquivo)
   if (r.pedidos.length === 0) {
     r.avisos.push(
-      'Nenhum pedido no layout Bluesoft foi encontrado. Verifique se o PDF é um pedido de compra com texto (não escaneado).'
+      'Layout de PDF não reconhecido. Hoje o programa lê o pedido do Bluesoft (Supermercados DB) e o "210 - Emitir Pedido de Compra". Verifique se o PDF tem texto (não escaneado) ou envie o modelo para ser incluído.'
     )
   }
   return r
