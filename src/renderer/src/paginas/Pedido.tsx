@@ -485,7 +485,7 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
                   onClick={() => setAtual(p.numero)}
                   onMouseEnter={(ev) => { const r = ev.currentTarget.getBoundingClientRect(); setBalao({ chave: p.numero, x: r.left, y: r.bottom + 6 }) }}
                   onMouseLeave={() => setBalao(null)}>
-                  <b>{p.numero}{sit && sit.estado !== 'novo' && <span className="contador">{sit.enviados}/{sit.total}</span>}</b>
+                  <b>{p.numero}</b>
                   <span>{p.loja || formatarCnpj(p.cnpjLoja)}</span>
                   <span style={{ display: 'block' }}>
                     {p.itens.length} itens{p.totalPdf !== null ? `, ${moeda(p.totalPdf)}` : ''}
@@ -497,21 +497,11 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
           </div>
         )}
         {balao && pedidos[balao.chave] && (() => {
-          const e = pedidos[balao.chave]
-          const sit = situacao(e)
+          const sit = situacao(pedidos[balao.chave])
           return (
-            <div className="balao-pedido" style={{ left: Math.min(balao.x, window.innerWidth - 380), top: balao.y }} role="tooltip">
-              <div className={`titulo ${sit.estado}`}>
-                {sit.estado === 'completo' ? '🟢 Todos os itens enviados' : sit.estado === 'parcial' ? '🟡 Enviado parcialmente: ainda tem pendentes' : 'Ainda não gerado'}
-              </div>
-              {e.geracoes.map((g) => (
-                <div key={g.ano + g.numero}>Gerado: <b>{g.numero}</b> · {g.nomeConexao ?? g.conexao} · {g.qtd ?? '?'} {g.qtd === 1 ? 'item' : 'itens'}</div>
-              ))}
-              {sit.estado !== 'completo' && sit.pendentes.map((x) => (
-                <div key={x.motivo}>Pendente: <b>{x.n} {x.n === 1 ? 'item' : 'itens'}</b>, {x.motivo}</div>
-              ))}
-              {sit.estado === 'novo' && <div>{sit.total} itens para gerar</div>}
-              <div className="legenda">🟡 amarelo = enviado parcial, ainda há pendentes<br />🟢 verde = todos os itens enviados</div>
+            <div className="balao-pedido" style={{ left: Math.min(balao.x, window.innerWidth - 220), top: balao.y }} role="tooltip">
+              <div>Gerados: <b>{sit.enviados}</b></div>
+              <div>Pendentes: <b>{sit.total - sit.enviados}</b></div>
             </div>
           )
         })()}
