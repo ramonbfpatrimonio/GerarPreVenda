@@ -387,3 +387,23 @@ p { margin: 0; }
 
 .login .lado-form > * { width: 100%; max-width: 440px; }
 .login .lado-form > .logo-login { width: auto; }
+
+/* ------------------------------------------------------------------ pedido: lista que cresce */
+.pedido-topo { flex: none; }
+.pedido-topo.recolhido { padding-top: 0; padding-bottom: 0; border-bottom: 0; }
+.puxador { flex: none; height: 12px; cursor: row-resize; display: flex; align-items: center; justify-content: center; gap: 10px; background: var(--superficie); border-bottom: 1px solid var(--linha); user-select: none; touch-action: none; }
+.puxador span { width: 46px; height: 4px; border-radius: 3px; background: var(--linha-forte); }
+.puxador:hover span { background: var(--acao); }
+.puxador small { font-size: 11.5px; color: var(--grafite); }
+.puxador:has(small) { height: 26px; }
+.area-tabela .tabela { min-width: 1050px; }
+.area-tabela .tabela thead th { position: sticky; top: 0; z-index: 1; }
+.tabela tr.de-fora td { opacity: .45; }
+.tabela tr.de-fora td:last-child { opacity: 1; }
+.rodape-pedido { flex-wrap: wrap; row-gap: 10px; }
+.rodape-pedido .indicador.ok b { color: var(--ok); }
+.fechar-pedido { color: var(--grafite); }
+.fechar-pedido:hover { color: var(--erro); border-color: var(--erro); }
+@media (max-width: 1280px) { .rodape-pedido { gap: 16px; } .rodape-pedido .acoes { margin-left: 0; width: 100%; justify-content: flex-end; } }
+.pedido-barra-arquivo { flex: none; padding: 10px 22px 0; background: var(--superficie); }
+.pedido-barra-arquivo + .pedido-topo { padding-top: 10px; }

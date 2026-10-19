@@ -39,7 +39,7 @@ const conexoesNuvem: { id: string; empresa_id: string; dados: DadosConexaoNuvem 
 
 // "Computador": cópia local com as senhas deste PC (como se já tivesse sincronizado antes)
 const locais: PerfilConexao[] = conexoesNuvem.map((c) => ({ ...c.dados, temSenha: false, atualizadoEm: new Date().toISOString() }))
-const senhasLocais = new Set(['hage-com'])
+const senhasLocais = new Set(['hage-com', 'hage-ind'])
 
 const pdf = pedidosDemo as ResultadoPdf
 const produtos = new Map<string, ProdutoErp>()
@@ -170,9 +170,14 @@ export function instalarApiDemo() {
       lerArquivo: async () => structuredClone(pdf)
     },
     erp: {
-      produtos: async (_id, codigos) => {
+      produtos: async (id, codigos) => {
         await espera(300)
-        return Object.fromEntries(codigos.map((c) => [c, produtos.get(c) ?? null]))
+        // INDUSTRIA tem o produto que falta na COMERCIO (para testar a troca de banco)
+        const extra = (c: string): ProdutoErp | null =>
+          id === 'hage-ind' && c === '7898717041118'
+            ? { codigo: '009001', codBarras: c, descricao: 'PRODUTO SÓ NA INDÚSTRIA', unid: 'UN', unidades: 1, qtUndFor: 1, precoVenda: 1, sitTrib: '00', aliqIcmsN: 20, aliqIcmsF: 0, percAgrega: 0, percRed: 0 }
+            : null
+        return Object.fromEntries(codigos.map((c) => [c, produtos.get(c) ?? extra(c)]))
       },
       cliente: async (_id, cnpj) => {
         await espera(200)
@@ -222,7 +227,7 @@ export function instalarApiDemo() {
       }
     },
     atualizacao: {
-      versao: async () => '1.2.5',
+      versao: async () => '1.2.6',
       instalar: async () => undefined,
       verificar: async () => ({ ok: true }),
       aoMudar: () => () => undefined

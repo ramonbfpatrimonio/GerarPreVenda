@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ClienteErp, FiltroST, PedidoPdf, PreVendaExistente, ResultadoGeracao, ResultadoPdf } from '@shared/tipos'
+import type { ClienteErp, FiltroST, PedidoPdf, PreVendaExistente, ProdutoErp, ResultadoGeracao, ResultadoPdf } from '@shared/tipos'
 import { calcularLinha, passaFiltro, resumir, type LinhaPedido, type ModoConversao } from '@shared/regras'
 import { cnpj14, formatarCnpj, moeda, numero, numeroBR, qtd, soDigitos } from '@shared/numeros'
 import { useAviso, useConexoes, useSessao } from '../contexto'
@@ -19,8 +19,14 @@ interface EstadoPedido {
   pedidoCompra: string
   linhas: LinhaPedido[]
   enviados: string[] // ids das linhas já enviadas
+  envioDe: Record<string, string> // linha -> "COMERCIO 000413"
+  fora: string[] // linhas deixadas de fora pelo usuário (continuam na lista)
   geracoes: Geracao[]
   produtosDe: string // id da conexão de onde vieram os produtos
+  cache: Record<string, Record<string, ProdutoErp | null>> // produtos já consultados em cada banco
+  // conversão é de cada pedido
+  modo: ModoConversao
+  abaterST: boolean
 }
 
 let seq = 0
@@ -43,8 +49,13 @@ function deItensPdf(p: PedidoPdf, arquivo: string): EstadoPedido {
       totalPdf: it.total
     })),
     enviados: [],
+    envioDe: {},
+    fora: [],
     geracoes: [],
-    produtosDe: ''
+    produtosDe: '',
+    cache: {},
+    modo: 'ORIGINAL',
+    abaterST: false
   }
 }
 
@@ -57,8 +68,13 @@ function pedidoManual(): EstadoPedido {
     pedidoCompra: '',
     linhas: [{ id: novoId(), codigoLido: '', quantidadeOriginal: 0, precoOriginal: 0 }],
     enviados: [],
+    envioDe: {},
+    fora: [],
     geracoes: [],
-    produtosDe: ''
+    produtosDe: '',
+    cache: {},
+    modo: 'ORIGINAL',
+    abaterST: false
   }
 }
 
@@ -73,9 +89,6 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
   const [arquivo, setArquivo] = useState<ResultadoPdf | null>(null)
   const [pedidos, setPedidos] = useState<Record<string, EstadoPedido>>({})
   const [atual, setAtual] = useState<string | null>(null)
-  const [modo, setModo] = useState<ModoConversao>('ORIGINAL')
-  const [abaterST, setAbaterST] = useState(false)
-  const [qtdInteira, setQtdInteira] = useState(false)
   const [lendoPdf, setLendoPdf] = useState(false)
   const [buscando, setBuscando] = useState(false)
   const [arrastando, setArrastando] = useState(false)
@@ -87,6 +100,11 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
     (f: (e: EstadoPedido) => EstadoPedido) => setPedidos((ps) => (atual && ps[atual] ? { ...ps, [atual]: f(ps[atual]) } : ps)),
     [atual]
   )
+  // conversão de cada pedido (trocar num pedido não mexe nos outros)
+  const modo: ModoConversao = est?.modo ?? 'ORIGINAL'
+  const abaterST = est?.abaterST ?? false
+  const setModo = (m: ModoConversao) => alterar((e) => ({ ...e, modo: m }))
+  const setAbaterST = (v: boolean) => alterar((e) => ({ ...e, abaterST: v }))
 
   // ---------------- abrir PDF
   const carregarResultado = (r: ResultadoPdf | null) => {
@@ -98,9 +116,6 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
     for (const p of r.pedidos) novos[p.numero] = deItensPdf(p, r.arquivo)
     setPedidos(novos)
     setAtual(r.pedidos[0].numero)
-    setModo('ORIGINAL')
-    setAbaterST(false)
-    setQtdInteira(false)
     const itens = r.pedidos.reduce((s, p) => s + p.itens.length, 0)
     avisar(`${r.arquivo}: ${r.pedidos.length} pedido(s), ${itens} itens lidos.`, 'ok')
   }
@@ -135,7 +150,20 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
     setArquivo(null)
     setPedidos({ [p.chave]: p })
     setAtual(p.chave)
-    setModo('ORIGINAL')
+  }
+
+  // Fecha o arquivo/pedido aberto (para importar outro)
+  const fecharArquivo = () => {
+    const pendentes = Object.values(pedidos).reduce(
+      (s, e) => s + e.linhas.filter((l) => l.produto && !e.enviados.includes(l.id) && !e.fora.includes(l.id)).length,
+      0
+    )
+    const algumGerado = Object.values(pedidos).some((e) => e.geracoes.length > 0)
+    if ((pendentes > 0 || !algumGerado) && !confirm(pendentes > 0 ? `Fechar este pedido? ${pendentes} item(ns) localizado(s) ainda não foram gerados.` : 'Fechar este pedido sem gerar a pré-venda?')) return
+    setPedidos({})
+    setAtual(null)
+    setArquivo(null)
+    setSoProblemas(false)
   }
 
   // ---------------- produtos no ERP (uma consulta para o pedido inteiro)
@@ -143,15 +171,24 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
     async (forcar = false) => {
       if (!est || !ativa) return
       if (!forcar && est.produtosDe === ativa.id) return
-      const codigos = est.linhas.map((l) => l.codigoLido.trim()).filter(Boolean)
+      const codigos = [...new Set(est.linhas.map((l) => l.codigoLido.trim()).filter(Boolean))]
       if (codigos.length === 0) return
-      setBuscando(true)
+      // cada banco é consultado uma vez; ao voltar para um banco, usa o que já foi lido
+      const jaLidos = forcar ? {} : est.cache[ativa.id] ?? {}
+      const faltam = codigos.filter((c) => !(c in jaLidos))
+      setBuscando(faltam.length > 0)
       try {
-        const achados = await window.api.erp.produtos(ativa.id, codigos)
+        const novos = faltam.length ? await window.api.erp.produtos(ativa.id, faltam) : {}
+        const doBanco: Record<string, ProdutoErp | null> = { ...jaLidos }
+        for (const c of faltam) doBanco[c] = novos[c] ?? null
         alterar((e) => ({
           ...e,
           produtosDe: ativa.id,
-          linhas: e.linhas.map((l) => (l.codigoLido.trim() ? { ...l, produto: achados[l.codigoLido.trim()] ?? null } : l))
+          cache: { ...e.cache, [ativa.id]: doBanco },
+          // linhas já enviadas mantêm o produto do banco em que foram geradas
+          linhas: e.linhas.map((l) =>
+            e.enviados.includes(l.id) || !l.codigoLido.trim() ? l : { ...l, produto: doBanco[l.codigoLido.trim()] ?? null }
+          )
         }))
       } catch (e) {
         avisar(`Não foi possível buscar os produtos: ${(e as Error).message}`, 'erro')
@@ -195,11 +232,21 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
 
   // ---------------- cálculos
   const opcoes = useMemo(
-    () => ({ modo, abaterST, quantidadeInteira: qtdInteira, regras: { cstsComST: ativa?.regras.cstsComST ?? ['10', '70'] } }),
-    [modo, abaterST, qtdInteira, ativa?.regras.cstsComST]
+    () => ({ modo, abaterST, quantidadeInteira: false, regras: { cstsComST: ativa?.regras.cstsComST ?? ['10', '70'] } }),
+    [modo, abaterST, ativa?.regras.cstsComST]
   )
   const calcs = useMemo(() => (est ? est.linhas.map((l) => calcularLinha(l, opcoes)) : []), [est, opcoes])
-  const resumo = useMemo(() => resumir(calcs), [calcs])
+  // Linhas "em aberto": nem enviadas nem deixadas de fora. O resumo e a geração olham só para elas.
+  const emAberto = (id: string) => !!est && !est.enviados.includes(id) && !est.fora.includes(id)
+  const resumo = useMemo(() => {
+    const abertos = est ? calcs.filter((_, i) => emAberto(est.linhas[i].id)) : []
+    // os totais são do que vai nesta pré-venda (só os localizados)
+    const r = resumir(abertos)
+    const ok = resumir(abertos.filter((c) => c.status === 'ok'))
+    return { ...r, total: ok.total, totalComST: ok.totalComST, comST: ok.comST }
+  }, [calcs, est]) // eslint-disable-line react-hooks/exhaustive-deps
+  const qtdEnviados = est?.enviados.length ?? 0
+  const qtdFora = est?.fora.length ?? 0
   const temEdicaoManual = !!est?.linhas.some((l) => l.manual && Object.keys(l.manual).length)
 
   // Fornecedor do PDF x empresa da conexão
@@ -227,11 +274,8 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
       linhas: e.linhas.map((l) => (l.id === id ? { ...l, codigoLido: valor.trim(), produto: undefined } : l))
     }))
   }
-  const removerLinha = (id: string) => alterar((e) => ({ ...e, linhas: e.linhas.filter((l) => l.id !== id) }))
-  const removerNaoEncontrados = () => {
-    alterar((e) => ({ ...e, linhas: e.linhas.filter((l) => l.produto !== null) }))
-    setSoProblemas(false)
-  }
+  const removerLinha = (id: string) =>
+    alterar((e) => (e.origem === 'manual' ? { ...e, linhas: e.linhas.filter((l) => l.id !== id) } : { ...e, fora: e.fora.includes(id) ? e.fora.filter((x) => x !== id) : [...e.fora, id] }))
   const adicionarLinha = () =>
     alterar((e) => ({ ...e, linhas: [...e.linhas, { id: novoId(), codigoLido: '', quantidadeOriginal: 0, precoOriginal: 0 }] }))
   const desfazerEdicoes = () => alterar((e) => ({ ...e, linhas: e.linhas.map((l) => ({ ...l, manual: undefined })) }))
@@ -256,7 +300,7 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
   const [gerando, setGerando] = useState(false)
   const [resultado, setResultado] = useState<{ r: ResultadoGeracao; filtro: FiltroST; avisoHistorico?: string } | null>(null)
 
-  const idsParaEnviar = (filtro: FiltroST) => (est ? est.linhas.filter((_, i) => calcs[i].status === 'ok' && passaFiltro(calcs[i], filtro)).map((l) => l.id) : [])
+  const idsParaEnviar = (filtro: FiltroST) => (est ? est.linhas.filter((l, i) => emAberto(l.id) && calcs[i].status === 'ok' && passaFiltro(calcs[i], filtro)).map((l) => l.id) : [])
 
   const bloqueio = (() => {
     if (!est) return 'Abra um pedido.'
@@ -265,8 +309,8 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
     if (status.estado === 'sem-senha') return 'Falta a senha do SQL neste computador: peça a um administrador.'
     if (status.estado !== 'on') return 'Sem conexão com o banco.'
     if (resumo.pendentes > 0 || buscando) return 'Aguardando a busca dos produtos.'
-    if (resumo.naoEncontrados > 0) return `${resumo.naoEncontrados} produto(s) não localizado(s) no ERP: corrija ou remova antes de gerar.`
     if (resumo.comProblema > 0) return `${resumo.comProblema} item(ns) sem quantidade ou valor.`
+    if (resumo.ok === 0) return resumo.naoEncontrados > 0 ? 'Nenhum item localizado neste banco para enviar.' : 'Todos os itens deste pedido já foram gerados.'
     if (!soDigitos(est.cnpj)) return 'Informe o CNPJ do cliente.'
     if (!cliente.dado) return cliente.carregando ? 'Procurando o cliente…' : 'Cliente não encontrado neste banco.'
     if (!est.pedidoCompra.trim()) return 'Informe o nº do pedido de compra.'
@@ -287,7 +331,9 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
       window.api.erp.verificarPedido(ativa.id, cliente.dado.codigo, est.pedidoCompra.trim()).catch(() => []),
       internet ? nuvem.jaGeradoNoHistorico(empresaAtual?.id ?? null, cnpj14(est.cnpj), est.pedidoCompra.trim()).catch(() => []) : Promise.resolve([])
     ])
-    setExistentes({ erp, nuvem: hist })
+    // pré-vendas geradas agora, deste mesmo pedido (complemento), não contam como repetição
+    const deste = (ano: string, num: string) => est.geracoes.some((g) => g.ano === ano && g.numero === num)
+    setExistentes({ erp: erp.filter((x) => !deste(x.ano, x.numero)), nuvem: hist.filter((x) => !deste(x.ano, x.numero)) })
   }
 
   const gerar = async () => {
@@ -329,6 +375,7 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
       alterar((e) => ({
         ...e,
         enviados: [...new Set([...e.enviados, ...ids])],
+        envioDe: { ...e.envioDe, ...Object.fromEntries([...ids].map((id) => [id, `${ativa.nome} ${r.numero}`])) },
         geracoes: [...e.geracoes, { ano: r.ano, numero: r.numero, filtro, conexao: `${ativa.cliente} › ${ativa.nome}` }]
       }))
       setConfirmar(null)
@@ -338,6 +385,46 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
     } finally {
       setGerando(false)
     }
+  }
+
+  // ---------------- altura da parte de cima (puxe a barra para cima para a lista crescer)
+  const refTopo = useRef<HTMLDivElement>(null)
+  const [alturaTopo, setAlturaTopo] = useState<number | null>(() => {
+    try {
+      const v = Number(localStorage.getItem('pedido:alturaTopo'))
+      return v > 0 ? v : null
+    } catch {
+      return null
+    }
+  })
+  const guardarAltura = (h: number | null) => {
+    setAlturaTopo(h)
+    try {
+      if (h === null) localStorage.removeItem('pedido:alturaTopo')
+      else localStorage.setItem('pedido:alturaTopo', String(Math.round(h)))
+    } catch {
+      /* só não lembra */
+    }
+  }
+  const comecarArraste = (ev: React.PointerEvent) => {
+    const topo = refTopo.current
+    if (!topo) return
+    ev.preventDefault()
+    const y0 = ev.clientY
+    const h0 = topo.getBoundingClientRect().height
+    const natural = topo.scrollHeight
+    const mover = (e: PointerEvent) => {
+      const h = Math.max(0, Math.min(natural, h0 + (e.clientY - y0)))
+      setAlturaTopo(h >= natural - 2 ? null : h)
+    }
+    const soltar = (e: PointerEvent) => {
+      window.removeEventListener('pointermove', mover)
+      window.removeEventListener('pointerup', soltar)
+      const h = Math.max(0, Math.min(natural, h0 + (e.clientY - y0)))
+      guardarAltura(h >= natural - 2 ? null : h < 24 ? 0 : h)
+    }
+    window.addEventListener('pointermove', mover)
+    window.addEventListener('pointerup', soltar)
   }
 
   // ---------------- render
@@ -376,15 +463,18 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
 
   return (
     <div className="pagina cheia">
-      <div className="pedido-topo">
-        <div className="arquivo-linha">
-          {est.origem === 'pdf' ? <span className="nome-arquivo">{est.arquivo}</span> : <span className="nome-arquivo">Pedido digitado</span>}
-          {arquivo && <span className="fraco mini">{arquivo.pedidos.length} pedido(s) no arquivo</span>}
-          <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-            <button className="botao" onClick={abrirPdf} disabled={lendoPdf}><Icone nome="pdf" /> Abrir outro PDF</button>
-            <button className="botao" onClick={novoManual}><Icone nome="mais" /> Pedido em branco</button>
-          </span>
-        </div>
+      <div className="pedido-barra-arquivo">
+          <div className="arquivo-linha">
+            {est.origem === 'pdf' ? <span className="nome-arquivo">{est.arquivo}</span> : <span className="nome-arquivo">Pedido digitado</span>}
+            {arquivo && <span className="fraco mini">{arquivo.pedidos.length} pedido(s) no arquivo</span>}
+            <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+              <button className="botao fechar-pedido" onClick={fecharArquivo} title="Fechar este pedido para importar outro" aria-label="Fechar pedido">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg> Fechar
+              </button>
+            </span>
+          </div>
+      </div>
+      <div className={`pedido-topo ${alturaTopo === 0 ? 'recolhido' : ''}`} ref={refTopo} style={alturaTopo !== null ? { maxHeight: alturaTopo, overflow: 'auto' } : undefined}>
 
         {arquivo && arquivo.pedidos.length > 1 && (
           <div className="pedidos-arquivo">
@@ -398,6 +488,7 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
                   <span style={{ display: 'block' }}>
                     {p.itens.length} itens{p.totalPdf !== null ? `, ${moeda(p.totalPdf)}` : ''}
                     {gerado ? `, gerada ${e.geracoes.map((g) => g.numero).join(', ')}` : ''}
+                    {gerado && e.linhas.length - e.enviados.length - e.fora.length > 0 ? ` · ${e.linhas.length - e.enviados.length - e.fora.length} pendente(s)` : ''}
                   </span>
                 </button>
               )
@@ -451,13 +542,16 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
           </Alerta>
         )}
         {resumo.naoEncontrados > 0 && (
-          <Alerta tipo="erro" acoes={<>
-            <button className="botao" onClick={() => setSoProblemas((s) => !s)}>{soProblemas ? 'Mostrar todos' : 'Mostrar só eles'}</button>
-            <button className="botao perigo" onClick={removerNaoEncontrados}>Remover do pedido</button>
-          </>}>
-            <b>{resumo.naoEncontrados} produto(s) não localizado(s)</b> em {ativa?.cliente} › {ativa?.nome}. A planilha deixava esses itens de fora sem avisar; aqui a geração fica bloqueada até você decidir.
+          <Alerta tipo="aviso" acoes={<button className="botao" onClick={() => setSoProblemas((s) => !s)}>{soProblemas ? 'Mostrar todos' : 'Mostrar só eles'}</button>}>
+            <b>{resumo.naoEncontrados} produto(s) não localizado(s)</b> em {ativa?.cliente} › {ativa?.nome}. Eles <b>continuam na lista</b> e não vão nesta pré-venda: troque de banco, corrija o código ou ajuste e gere depois.
           </Alerta>
         )}
+      </div>
+
+      <div className="puxador" onPointerDown={comecarArraste} onDoubleClick={() => guardarAltura(alturaTopo === 0 ? null : 0)}
+        title="Arraste para cima para aumentar a lista (duplo clique recolhe/abre)" role="separator" aria-orientation="horizontal">
+        <span />
+        {alturaTopo === 0 && <small>{est.pdf?.loja || est.pedidoCompra} · {formatarCnpj(est.cnpj)} · clique duas vezes para mostrar os dados do pedido</small>}
       </div>
 
       <div className="barra-ferramentas">
@@ -470,11 +564,10 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
           </div>
         </div>
         <label className="check"><input type="checkbox" checked={abaterST} onChange={(e) => setAbaterST(e.target.checked)} /> Abater ST do valor</label>
-        <label className="check"><input type="checkbox" checked={qtdInteira} onChange={(e) => setQtdInteira(e.target.checked)} /> Qtd. sem decimais</label>
         <div className="direita">
           {temEdicaoManual && <button className="botao leve" onClick={desfazerEdicoes}>Desfazer edições</button>}
-          <button className="botao leve" onClick={() => setColar(true)}><Icone nome="colar" /> Colar</button>
-          <button className="botao leve" onClick={adicionarLinha}><Icone nome="mais" /> Item</button>
+          {est.origem === 'manual' && <button className="botao leve" onClick={() => setColar(true)}><Icone nome="colar" /> Colar</button>}
+          {est.origem === 'manual' && <button className="botao leve" onClick={adicionarLinha}><Icone nome="mais" /> Item</button>}
           <button className="botao leve" onClick={() => void buscarProdutos(true)} disabled={buscando || status.estado !== 'on'}>
             {buscando ? <span className="spinner" /> : <Icone nome="atualizar" />} Buscar de novo
           </button>
@@ -503,8 +596,9 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
           <tbody>
             {linhasVisiveis.map(({ l, c, i }) => {
               const enviado = est.enviados.includes(l.id)
+              const deFora = est.fora.includes(l.id)
               const p = l.produto
-              const classe = [c.status === 'nao-encontrado' ? 'nao-encontrado' : '', enviado ? 'enviado' : c.temST ? 'com-st' : ''].join(' ')
+              const classe = [!enviado && c.status === 'nao-encontrado' ? 'nao-encontrado' : '', enviado ? 'enviado' : c.temST ? 'com-st' : '', deFora ? 'de-fora' : ''].join(' ')
               return (
                 <tr key={l.id} className={classe}>
                   <td className="idx num">{i + 1}</td>
@@ -522,7 +616,7 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
                   <td className="desc">
                     {p === undefined ? <span className="fraco">{l.descricaoPdf ?? (l.codigoLido ? 'Buscando…' : '')}</span> :
                       p === null ? <>Código não localizado no ERP{l.descricaoPdf ? <div className="mini" style={{ fontWeight: 400 }}>No PDF: {l.descricaoPdf}</div> : null}</> :
-                      <>{p.descricao}{' '}{c.temST && <span className="etiqueta st">ST {p.sitTrib}</span>}{enviado && <span className="etiqueta ok">enviado</span>}{c.aviso && <div className="mini" style={{ color: 'var(--aviso)', fontWeight: 400 }}>{c.aviso}</div>}</>}
+                      <>{p.descricao}{' '}{c.temST && <span className="etiqueta st">ST {p.sitTrib}</span>}{enviado && <span className="etiqueta ok">enviado · {est.envioDe[l.id] ?? ''}</span>}{deFora && <span className="etiqueta neutra">fora desta geração</span>}{c.aviso && <div className="mini" style={{ color: 'var(--aviso)', fontWeight: 400 }}>{c.aviso}</div>}</>}
                   </td>
                   <td>{p?.unid ?? ''}</td>
                   <td className="num">{p ? qtd(p.unidades) : ''}</td>
@@ -530,7 +624,9 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
                   <td className="num">{c.icmsf ? numero(c.icmsf) : ''}</td>
                   <td className="num" style={{ fontWeight: 600 }}>{numero(c.total)}</td>
                   <td>
-                    <button className="botao leve remover" onClick={() => removerLinha(l.id)} title="Remover item" aria-label="Remover item"><Icone nome="lixo" tamanho={15} /></button>
+                    {!enviado && (est.origem === 'manual' || !deFora
+                      ? <button className="botao leve remover" onClick={() => removerLinha(l.id)} title={est.origem === 'manual' ? 'Remover item' : 'Deixar fora desta geração (continua na lista)'} aria-label="Deixar de fora"><Icone nome="lixo" tamanho={15} /></button>
+                      : <button className="botao leve" onClick={() => removerLinha(l.id)} title="Incluir de novo" aria-label="Incluir de novo" style={{ fontSize: 12, padding: '3px 8px' }}>Incluir</button>)}
                   </td>
                 </tr>
               )
@@ -540,8 +636,10 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
       </div>
 
       <div className="rodape-pedido">
-        <div className="indicador"><small>Itens</small><b>{resumo.linhas}</b></div>
+        <div className="indicador"><small>A enviar</small><b>{resumo.ok}</b></div>
         <div className={`indicador ${resumo.naoEncontrados ? 'erro' : ''}`}><small>Não localizados</small><b>{resumo.naoEncontrados}</b></div>
+        {qtdEnviados > 0 && <div className="indicador ok"><small>Já enviados</small><b>{qtdEnviados}</b></div>}
+        {qtdFora > 0 && <div className="indicador"><small>Fora</small><b>{qtdFora}</b></div>}
         <div className="indicador st"><small>Com ST</small><b>{resumo.comST}</b></div>
         <span className="divisor" />
         <div className="indicador"><small>Total</small><b>{moeda(resumo.total)}</b></div>
@@ -584,6 +682,8 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
                 <label className="check" style={{ marginTop: 8 }}><input type="checkbox" checked={mesmoAssim} onChange={(e) => setMesmoAssim(e.target.checked)} /> Gerar mesmo assim</label>
               </Alerta>
             )}
+            {est.geracoes.length > 0 && <p className="mini fraco">Complemento de {est.geracoes.map((g) => `${g.numero}/${g.ano}`).join(', ')}: vão só os itens que ainda não foram gerados.</p>}
+            {resumo.naoEncontrados > 0 && <p className="mini" style={{ color: 'var(--aviso)' }}>{resumo.naoEncontrados} item(ns) não localizado(s) neste banco ficam na lista para você resolver depois.</p>}
             <p className="mini fraco">Tudo é gravado de uma vez. Se qualquer item falhar, nada fica no ERP.</p>
           </>
         )}
