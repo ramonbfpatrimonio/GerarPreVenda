@@ -8,7 +8,7 @@ import { Icone } from '../componentes/Icone'
 import { Alerta, Modal } from '../componentes/Modal'
 
 // ----------------------------------------------------------------- estado
-interface Geracao { ano: string; numero: string; filtro: FiltroST; conexao: string }
+interface Geracao { ano: string; numero: string; filtro: FiltroST; conexao: string; nomeConexao?: string; qtd?: number }
 
 interface EstadoPedido {
   chave: string
@@ -343,7 +343,7 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
         ...e,
         enviados: [...new Set([...e.enviados, ...ids])],
         envioDe: { ...e.envioDe, ...Object.fromEntries([...ids].map((id) => [id, `${ativa.nome} ${r.numero}`])) },
-        geracoes: [...e.geracoes, { ano: r.ano, numero: r.numero, filtro, conexao: `${ativa.cliente} › ${ativa.nome}` }]
+        geracoes: [...e.geracoes, { ano: r.ano, numero: r.numero, filtro, conexao: `${ativa.cliente} › ${ativa.nome}`, nomeConexao: ativa.nome, qtd: ids.size }]
       }))
       setConfirmar(null)
       setResultado({ r, filtro, avisoHistorico })
@@ -353,6 +353,30 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
       setGerando(false)
     }
   }
+
+  // ---------------- situação de cada pedido do arquivo (cor da caixinha e balão)
+  // branco = nada gerado · amarelo = gerado em parte (ainda há itens não enviados) · verde = tudo enviado
+  const situacao = (e: EstadoPedido) => {
+    const total = e.linhas.length
+    const enviados = e.linhas.filter((l) => e.enviados.includes(l.id)).length
+    const nomeBanco = (id: string) => perfis.find((x) => x.id === id)?.nome ?? 'outro banco'
+    const pend = e.linhas.filter((l) => !e.enviados.includes(l.id))
+    const grupos = new Map<string, number>()
+    for (const l of pend) {
+      let motivo: string
+      if (e.fora.includes(l.id)) motivo = 'deixado de fora'
+      else {
+        const cod = l.codigoLido.trim()
+        const bancos = Object.entries(e.cache).filter(([, m]) => m[cod] === null).map(([id]) => nomeBanco(id))
+        const achadoEm = Object.entries(e.cache).filter(([, m]) => m[cod]).map(([id]) => nomeBanco(id))
+        motivo = achadoEm.length ? `localizado em ${achadoEm.join(' e ')}, ainda não gerado` : bancos.length ? `não localizado em ${bancos.join(' e ')}` : 'ainda não consultado'
+      }
+      grupos.set(motivo, (grupos.get(motivo) ?? 0) + 1)
+    }
+    const estado: 'novo' | 'parcial' | 'completo' = enviados === 0 ? 'novo' : enviados === total ? 'completo' : 'parcial'
+    return { estado, total, enviados, pendentes: [...grupos].map(([motivo, n]) => ({ motivo, n })) }
+  }
+  const [balao, setBalao] = useState<{ chave: string; x: number; y: number } | null>(null)
 
   // ---------------- altura da parte de cima (puxe a barra para cima para a lista crescer)
   const refTopo = useRef<HTMLDivElement>(null)
@@ -451,25 +475,46 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
       </div>
       <div className={`pedido-topo ${alturaTopo === 0 ? 'recolhido' : ''}`} ref={refTopo} style={alturaTopo !== null ? { maxHeight: alturaTopo, overflow: 'auto' } : undefined}>
 
-        {arquivo && arquivo.pedidos.length > 1 && (
+        {arquivo && arquivo.pedidos.length > 0 && (
           <div className="pedidos-arquivo">
             {arquivo.pedidos.map((p) => {
               const e = pedidos[p.numero]
-              const gerado = (e?.geracoes.length ?? 0) > 0
+              const sit = e ? situacao(e) : null
               return (
-                <button key={p.numero} className={`pedido-chip ${p.numero === atual ? 'atual' : ''} ${gerado ? 'gerado' : ''}`} onClick={() => setAtual(p.numero)}>
-                  <b>{p.numero}</b>
+                <button key={p.numero} className={`pedido-chip ${p.numero === atual ? 'atual' : ''} ${sit?.estado === 'completo' ? 'gerado' : sit?.estado === 'parcial' ? 'parcial' : ''}`}
+                  onClick={() => setAtual(p.numero)}
+                  onMouseEnter={(ev) => { const r = ev.currentTarget.getBoundingClientRect(); setBalao({ chave: p.numero, x: r.left, y: r.bottom + 6 }) }}
+                  onMouseLeave={() => setBalao(null)}>
+                  <b>{p.numero}{sit && sit.estado !== 'novo' && <span className="contador">{sit.enviados}/{sit.total}</span>}</b>
                   <span>{p.loja || formatarCnpj(p.cnpjLoja)}</span>
                   <span style={{ display: 'block' }}>
                     {p.itens.length} itens{p.totalPdf !== null ? `, ${moeda(p.totalPdf)}` : ''}
-                    {gerado ? `, gerada ${e.geracoes.map((g) => g.numero).join(', ')}` : ''}
-                    {gerado && e.linhas.length - e.enviados.length - e.fora.length > 0 ? ` · ${e.linhas.length - e.enviados.length - e.fora.length} pendente(s)` : ''}
+                    {e && e.geracoes.length > 0 ? `, gerada ${e.geracoes.map((g) => g.numero).join(', ')}` : ''}
                   </span>
                 </button>
               )
             })}
           </div>
         )}
+        {balao && pedidos[balao.chave] && (() => {
+          const e = pedidos[balao.chave]
+          const sit = situacao(e)
+          return (
+            <div className="balao-pedido" style={{ left: Math.min(balao.x, window.innerWidth - 380), top: balao.y }} role="tooltip">
+              <div className={`titulo ${sit.estado}`}>
+                {sit.estado === 'completo' ? '🟢 Todos os itens enviados' : sit.estado === 'parcial' ? '🟡 Enviado parcialmente: ainda tem pendentes' : 'Ainda não gerado'}
+              </div>
+              {e.geracoes.map((g) => (
+                <div key={g.ano + g.numero}>Gerado: <b>{g.numero}</b> · {g.nomeConexao ?? g.conexao} · {g.qtd ?? '?'} {g.qtd === 1 ? 'item' : 'itens'}</div>
+              ))}
+              {sit.estado !== 'completo' && sit.pendentes.map((x) => (
+                <div key={x.motivo}>Pendente: <b>{x.n} {x.n === 1 ? 'item' : 'itens'}</b>, {x.motivo}</div>
+              ))}
+              {sit.estado === 'novo' && <div>{sit.total} itens para gerar</div>}
+              <div className="legenda">🟡 amarelo = enviado parcial, ainda há pendentes<br />🟢 verde = todos os itens enviados</div>
+            </div>
+          )
+        })()}
 
         <div className="dados-pedido">
           <label className="campo">
@@ -512,7 +557,7 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
         )}
         {est.pdf?.avisos.map((a) => <Alerta key={a} tipo="erro">{a}</Alerta>)}
         {est.geracoes.length > 0 && (
-          <Alerta tipo="ok">
+          <Alerta tipo={situacao(est).estado === 'completo' ? 'ok' : 'aviso'}>
             Pré-venda gerada neste pedido: {est.geracoes.map((g) => `${g.numero}/${g.ano} (${NOMES_FILTRO[g.filtro]}, ${g.conexao})`).join('; ')}.
           </Alerta>
         )}
