@@ -239,8 +239,20 @@ export function Pagina_Conexoes() {
               <div className="cores">{CORES.map((c) => <button key={c} type="button" className={form.cor === c ? 'atual' : ''} style={{ background: c }} onClick={() => muda('cor', c)} aria-label={`Cor ${c}`} />)}</div>
             </div>
 
-            <label className="campo c5"><span>Servidor</span><input className="entrada" value={form.servidor} onChange={(e) => muda('servidor', e.target.value)} placeholder="THIAGO-DELL, localhost ou 192.168.0.10" /><small>Para o banco deste computador use localhost</small></label>
-            <label className="campo c4"><span>Instância</span><input className="entrada" value={form.instancia} onChange={(e) => muda('instancia', e.target.value)} placeholder="SQLEXPRESS (vazio = padrão)" /></label>
+            <label className="campo c5"><span>Servidor</span>
+              <input className="entrada" value={form.servidor} onChange={(e) => muda('servidor', e.target.value)} placeholder="THIAGO-DELL, localhost ou 192.168.0.10"
+                onBlur={() => {
+                  // "SERVIDOR\INSTANCIA" digitado junto, como no Management Studio: separa
+                  const [srv, inst] = form.servidor.split('\\')
+                  if (inst !== undefined) setForm((f) => ({ ...f, servidor: srv.trim(), instancia: inst.trim() }))
+                }} />
+              <small>Igual ao "Nome do servidor" do Management Studio. Para o banco deste computador use localhost.</small>
+            </label>
+            <label className="campo c4"><span>Instância</span><input className="entrada" value={form.instancia} onChange={(e) => muda('instancia', e.target.value)} placeholder="vazio = instância padrão" />
+              {form.instancia.trim() && form.instancia.trim().toLowerCase() === form.servidor.trim().toLowerCase()
+                ? <small style={{ color: 'var(--aviso)', fontWeight: 600 }}>A instância não é o nome do computador. Se no Management Studio você conecta só em {form.servidor}, deixe vazio.</small>
+                : <small>Só o que vem depois da barra: SERVIDOR\<b>SQLEXPRESS</b></small>}
+            </label>
             <label className="campo c3"><span>Porta</span><input className="entrada" value={form.porta ?? ''} onChange={(e) => muda('porta', soDigitos(e.target.value) ? Number(soDigitos(e.target.value)) : null)} placeholder="1433" /></label>
 
             <label className="campo c4"><span>Autenticação</span>
