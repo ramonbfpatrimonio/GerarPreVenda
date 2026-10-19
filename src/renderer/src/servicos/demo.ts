@@ -177,7 +177,9 @@ export function instalarApiDemo() {
           id === 'hage-ind' && c === '7898717041118'
             ? { codigo: '009001', codBarras: c, descricao: 'PRODUTO SÓ NA INDÚSTRIA', unid: 'UN', unidades: 1, qtUndFor: 1, precoVenda: 1, sitTrib: '00', aliqIcmsN: 20, aliqIcmsF: 0, percAgrega: 0, percRed: 0 }
             : null
-        return Object.fromEntries(codigos.map((c) => [c, produtos.get(c) ?? extra(c)]))
+        // e não tem dois da COMERCIO
+        const naIndustriaNao = ['7898717040944', '7898717040340']
+        return Object.fromEntries(codigos.map((c) => [c, id === 'hage-ind' && naIndustriaNao.includes(c) ? null : produtos.get(c) ?? extra(c)]))
       },
       cliente: async (_id, cnpj) => {
         await espera(200)

@@ -43,16 +43,17 @@ function Programa() {
 
   // Área administrativa fechou: volta para o pedido se estava numa aba oculta
   useEffect(() => {
-    if (!admin.perfil && ABAS_ADMIN.includes(aba)) setAba('pedido')
-  }, [admin.perfil]) // eslint-disable-line react-hooks/exhaustive-deps
+    if ((!admin.perfil && ABAS_ADMIN.includes(aba)) || (!admin.ehSuper && ['conexoes', 'eventos', 'aparencia', 'empresas'].includes(aba))) setAba('pedido')
+  }, [admin.perfil, admin.ehSuper]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const itens: { id: Aba; rotulo: string; icone: string; mostrar: boolean }[] = [
     { id: 'pedido', rotulo: 'Pedido', icone: 'pedido', mostrar: true },
     { id: 'historico', rotulo: 'Histórico', icone: 'historico', mostrar: true },
-    { id: 'conexoes', rotulo: 'Conexões', icone: 'banco', mostrar: !!admin.perfil },
+    // administrador da empresa: só Usuários; o resto é do super administrador
+    { id: 'conexoes', rotulo: 'Conexões', icone: 'banco', mostrar: admin.ehSuper },
     { id: 'usuarios', rotulo: 'Usuários', icone: 'usuarios', mostrar: !!admin.perfil },
-    { id: 'eventos', rotulo: 'Eventos do sistema', icone: 'eventos', mostrar: !!admin.perfil },
-    { id: 'aparencia', rotulo: 'Aparência', icone: 'imagem', mostrar: !!admin.perfil },
+    { id: 'eventos', rotulo: 'Eventos do sistema', icone: 'eventos', mostrar: admin.ehSuper },
+    { id: 'aparencia', rotulo: 'Aparência', icone: 'imagem', mostrar: admin.ehSuper },
     { id: 'empresas', rotulo: 'Empresas', icone: 'empresa', mostrar: admin.ehSuper }
   ]
   const visiveis = itens.filter((i) => i.mostrar)
@@ -80,10 +81,10 @@ function Programa() {
         {/* O pedido fica montado o tempo todo para não perder o que foi feito ao trocar de aba. */}
         <Pagina_Pedido visivel={aba === 'pedido'} />
         <Pagina_Historico visivel={aba === 'historico'} />
-        {admin.perfil && aba === 'conexoes' && <Pagina_Conexoes />}
+        {admin.ehSuper && aba === 'conexoes' && <Pagina_Conexoes />}
         {admin.perfil && <Pagina_Usuarios visivel={aba === 'usuarios'} />}
-        {admin.perfil && <Pagina_Eventos visivel={aba === 'eventos'} />}
-        {admin.perfil && <Pagina_Aparencia visivel={aba === 'aparencia'} />}
+        {admin.ehSuper && <Pagina_Eventos visivel={aba === 'eventos'} />}
+        {admin.ehSuper && <Pagina_Aparencia visivel={aba === 'aparencia'} />}
         {admin.ehSuper && <Pagina_Empresas visivel={aba === 'empresas'} irParaPedido={() => setAba('pedido')} />}
       </div>
     </div>

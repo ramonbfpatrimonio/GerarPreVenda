@@ -173,7 +173,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
         <form onSubmit={entrar} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
             <h2>Área administrativa</h2>
-            <p className="fraco mini">Conexões, usuários, eventos e aparência. Informe o login de um administrador.</p>
+            <p className="fraco mini">Gestão de usuários da empresa. Informe o login de um administrador.</p>
           </div>
           {erro && <Alerta tipo="erro">{erro}</Alerta>}
           <label className="campo"><span>E-mail</span><input className="entrada" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus={!email} autoComplete="off" /></label>

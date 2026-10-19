@@ -59,25 +59,6 @@ function deItensPdf(p: PedidoPdf, arquivo: string): EstadoPedido {
   }
 }
 
-function pedidoManual(): EstadoPedido {
-  return {
-    chave: `manual-${Date.now()}`,
-    origem: 'manual',
-    arquivo: '',
-    cnpj: '',
-    pedidoCompra: '',
-    linhas: [{ id: novoId(), codigoLido: '', quantidadeOriginal: 0, precoOriginal: 0 }],
-    enviados: [],
-    envioDe: {},
-    fora: [],
-    geracoes: [],
-    produtosDe: '',
-    cache: {},
-    modo: 'ORIGINAL',
-    abaterST: false
-  }
-}
-
 const NOMES_FILTRO: Record<FiltroST, string> = { TODOS: 'todos os itens', ST: 'só itens com ST', SEM_ST: 'só itens sem ST' }
 
 // ----------------------------------------------------------------- página
@@ -92,8 +73,15 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
   const [lendoPdf, setLendoPdf] = useState(false)
   const [buscando, setBuscando] = useState(false)
   const [arrastando, setArrastando] = useState(false)
-  const [soProblemas, setSoProblemas] = useState(false)
-  const [colar, setColar] = useState(false)
+  // filtros da lista (menu "Exibir")
+  const [exibir, setExibir] = useState({ localizados: false, naoLocalizados: false, ocultarEnviados: false })
+  useEffect(() => {
+    // fecha o menu "Exibir" ao clicar fora dele
+    const fora = (e: MouseEvent) =>
+      document.querySelectorAll<HTMLDetailsElement>('details.menu-exibir[open]').forEach((d) => !d.contains(e.target as Node) && d.removeAttribute('open'))
+    document.addEventListener('mousedown', fora)
+    return () => document.removeEventListener('mousedown', fora)
+  }, [])
 
   const est = atual ? pedidos[atual] : null
   const alterar = useCallback(
@@ -145,12 +133,6 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
     }
   }
 
-  const novoManual = () => {
-    const p = pedidoManual()
-    setArquivo(null)
-    setPedidos({ [p.chave]: p })
-    setAtual(p.chave)
-  }
 
   // Fecha o arquivo/pedido aberto (para importar outro)
   const fecharArquivo = () => {
@@ -163,7 +145,7 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
     setPedidos({})
     setAtual(null)
     setArquivo(null)
-    setSoProblemas(false)
+    setExibir({ localizados: false, naoLocalizados: false, ocultarEnviados: false })
   }
 
   // ---------------- produtos no ERP (uma consulta para o pedido inteiro)
@@ -276,22 +258,7 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
   }
   const removerLinha = (id: string) =>
     alterar((e) => (e.origem === 'manual' ? { ...e, linhas: e.linhas.filter((l) => l.id !== id) } : { ...e, fora: e.fora.includes(id) ? e.fora.filter((x) => x !== id) : [...e.fora, id] }))
-  const adicionarLinha = () =>
-    alterar((e) => ({ ...e, linhas: [...e.linhas, { id: novoId(), codigoLido: '', quantidadeOriginal: 0, precoOriginal: 0 }] }))
   const desfazerEdicoes = () => alterar((e) => ({ ...e, linhas: e.linhas.map((l) => ({ ...l, manual: undefined })) }))
-
-  const aplicarColagem = (texto: string) => {
-    const novas: LinhaPedido[] = []
-    for (const bruta of texto.split(/\r?\n/)) {
-      const cols = bruta.split(/\t|;/).map((c) => c.trim())
-      if (!cols[0]) continue
-      novas.push({ id: novoId(), codigoLido: soDigitos(cols[0]) || cols[0], quantidadeOriginal: numeroBR(cols[1] ?? '0'), precoOriginal: numeroBR(cols[2] ?? '0') })
-    }
-    if (!novas.length) return avisar('Nada para colar: use uma linha por item (código, quantidade, valor).', 'erro')
-    alterar((e) => ({ ...e, produtosDe: '', linhas: [...e.linhas.filter((l) => l.codigoLido), ...novas] }))
-    setColar(false)
-    avisar(`${novas.length} itens adicionados.`, 'ok')
-  }
 
   // ---------------- geração
   const [confirmar, setConfirmar] = useState<FiltroST | null>(null)
@@ -306,7 +273,7 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
     if (!est) return 'Abra um pedido.'
     if (!empresaAtual) return 'Escolha a empresa na faixa superior.'
     if (!ativa) return 'Selecione uma conexão na faixa superior.'
-    if (status.estado === 'sem-senha') return 'Falta a senha do SQL neste computador: peça a um administrador.'
+    if (status.estado === 'sem-senha') return 'Falta a senha do SQL neste computador: peça ao super administrador.'
     if (status.estado !== 'on') return 'Sem conexão com o banco.'
     if (resumo.pendentes > 0 || buscando) return 'Aguardando a busca dos produtos.'
     if (resumo.comProblema > 0) return `${resumo.comProblema} item(ns) sem quantidade ou valor.`
@@ -447,9 +414,6 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
             <button className="botao primario grande" onClick={abrirPdf} disabled={lendoPdf}>
               {lendoPdf ? <span className="spinner" /> : <Icone nome="pdf" />} Abrir PDF
             </button>
-            <button className="botao grande" onClick={novoManual}>
-              <Icone nome="colar" /> Digitar ou colar itens
-            </button>
           </div>
           {!ativa && <p className="mini" style={{ marginTop: 18, marginBottom: 0 }}>Antes de gerar, escolha a conexão do cliente na faixa superior.</p>}
         </div>
@@ -457,7 +421,18 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
     )
   }
 
-  const linhasVisiveis = est.linhas.map((l, i) => ({ l, c: calcs[i], i })).filter(({ c }) => !soProblemas || c.status !== 'ok')
+  // situação de cada código no banco escolhido agora (undefined = ainda não consultado)
+  const noBanco = (l: LinhaPedido) => (ativa ? est.cache[ativa.id]?.[l.codigoLido.trim()] : undefined)
+  const linhasVisiveis = est.linhas
+    .map((l, i) => ({ l, c: calcs[i], i }))
+    .filter(({ l }) => {
+      const achado = noBanco(l)
+      if (exibir.localizados && !achado) return false
+      if (exibir.naoLocalizados && achado !== null) return false
+      if (exibir.ocultarEnviados && est.enviados.includes(l.id)) return false
+      return true
+    })
+  const filtroAtivo = exibir.localizados ? 'somente localizados' : exibir.naoLocalizados ? 'somente não localizados' : exibir.ocultarEnviados ? 'sem os enviados' : 'todos os itens'
   const qtdComST = idsParaEnviar('ST').length
   const qtdSemST = idsParaEnviar('SEM_ST').length
 
@@ -542,7 +517,7 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
           </Alerta>
         )}
         {resumo.naoEncontrados > 0 && (
-          <Alerta tipo="aviso" acoes={<button className="botao" onClick={() => setSoProblemas((s) => !s)}>{soProblemas ? 'Mostrar todos' : 'Mostrar só eles'}</button>}>
+          <Alerta tipo="aviso" acoes={<button className="botao" onClick={() => setExibir((x) => ({ ...x, localizados: false, naoLocalizados: !x.naoLocalizados }))}>{exibir.naoLocalizados ? 'Mostrar todos' : 'Mostrar só eles'}</button>}>
             <b>{resumo.naoEncontrados} produto(s) não localizado(s)</b> em {ativa?.cliente} › {ativa?.nome}. Eles <b>continuam na lista</b> e não vão nesta pré-venda: troque de banco, corrija o código ou ajuste e gere depois.
           </Alerta>
         )}
@@ -564,10 +539,17 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
           </div>
         </div>
         <label className="check"><input type="checkbox" checked={abaterST} onChange={(e) => setAbaterST(e.target.checked)} /> Abater ST do valor</label>
+        <details className="menu-exibir">
+          <summary className={filtroAtivo !== 'todos os itens' ? 'ativo' : ''}>Exibir: {filtroAtivo} <Icone nome="seta" tamanho={13} /></summary>
+          <div className="menu-exibir-lista">
+            <label className="check"><input type="checkbox" checked={exibir.localizados} onChange={(e) => setExibir((x) => ({ ...x, localizados: e.target.checked, naoLocalizados: false }))} /> Exibir somente localizados</label>
+            <label className="check"><input type="checkbox" checked={exibir.naoLocalizados} onChange={(e) => setExibir((x) => ({ ...x, naoLocalizados: e.target.checked, localizados: false }))} /> Exibir somente não localizados</label>
+            <label className="check"><input type="checkbox" checked={exibir.ocultarEnviados} onChange={(e) => setExibir((x) => ({ ...x, ocultarEnviados: e.target.checked }))} /> Ocultar os já enviados</label>
+            <small>{linhasVisiveis.length} de {est.linhas.length} itens na lista</small>
+          </div>
+        </details>
         <div className="direita">
           {temEdicaoManual && <button className="botao leve" onClick={desfazerEdicoes}>Desfazer edições</button>}
-          {est.origem === 'manual' && <button className="botao leve" onClick={() => setColar(true)}><Icone nome="colar" /> Colar</button>}
-          {est.origem === 'manual' && <button className="botao leve" onClick={adicionarLinha}><Icone nome="mais" /> Item</button>}
           <button className="botao leve" onClick={() => void buscarProdutos(true)} disabled={buscando || status.estado !== 'on'}>
             {buscando ? <span className="spinner" /> : <Icone nome="atualizar" />} Buscar de novo
           </button>
@@ -616,7 +598,7 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
                   <td className="desc">
                     {p === undefined ? <span className="fraco">{l.descricaoPdf ?? (l.codigoLido ? 'Buscando…' : '')}</span> :
                       p === null ? <>Código não localizado no ERP{l.descricaoPdf ? <div className="mini" style={{ fontWeight: 400 }}>No PDF: {l.descricaoPdf}</div> : null}</> :
-                      <>{p.descricao}{' '}{c.temST && <span className="etiqueta st">ST {p.sitTrib}</span>}{enviado && <span className="etiqueta ok">enviado · {est.envioDe[l.id] ?? ''}</span>}{deFora && <span className="etiqueta neutra">fora desta geração</span>}{c.aviso && <div className="mini" style={{ color: 'var(--aviso)', fontWeight: 400 }}>{c.aviso}</div>}</>}
+                      <>{p.descricao}{' '}{c.temST && <span className="etiqueta st">ST {p.sitTrib}</span>}{noBanco(l) ? <span className="etiqueta localizado">código localizado</span> : enviado && noBanco(l) === null ? <span className="etiqueta erro">código não localizado neste banco</span> : null}{enviado && <span className="etiqueta ok">enviado · {est.envioDe[l.id] ?? ''}</span>}{deFora && <span className="etiqueta neutra">fora desta geração</span>}{c.aviso && <div className="mini" style={{ color: 'var(--aviso)', fontWeight: 400 }}>{c.aviso}</div>}</>}
                   </td>
                   <td>{p?.unid ?? ''}</td>
                   <td className="num">{p ? qtd(p.unidades) : ''}</td>
@@ -707,7 +689,6 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
         )}
       </Modal>
 
-      <ModalColar aberto={colar} aoFechar={() => setColar(false)} aoColar={aplicarColagem} />
     </div>
   )
 }
@@ -733,17 +714,5 @@ function CelulaNum({ valor, casas, moeda: ehMoeda, convertido, editado, aoMudar,
         }}
       />
     </td>
-  )
-}
-
-function ModalColar({ aberto, aoFechar, aoColar }: { aberto: boolean; aoFechar: () => void; aoColar: (t: string) => void }) {
-  const [texto, setTexto] = useState('')
-  return (
-    <Modal aberto={aberto} aoFechar={aoFechar} largo rotulo="Colar itens"
-      botoes={<><button className="botao" onClick={aoFechar}>Cancelar</button><button className="botao primario" onClick={() => { aoColar(texto); setTexto('') }}>Adicionar itens</button></>}>
-      <h2>Colar itens</h2>
-      <p className="fraco">Copie do Excel três colunas: código de barras (ou código do produto), quantidade e valor unitário. Uma linha por item.</p>
-      <textarea className="entrada" rows={12} value={texto} onChange={(e) => setTexto(e.target.value)} placeholder={'7898717040944\t2\t8,99\n7898717040340\t1\t1,69'} style={{ fontVariantNumeric: 'tabular-nums' }} autoFocus />
-    </Modal>
   )
 }

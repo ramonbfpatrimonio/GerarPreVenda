@@ -55,14 +55,14 @@ Na tela, todo mundo vê só **Pedido** e **Histórico**. O resto fica oculto na 
 
 | Papel | Vê e faz |
 |---|---|
-| **Super administrador** (você) | Todas as empresas: cria e bloqueia empresas, escolhe em qual empresa trabalhar na faixa do topo, vê histórico e eventos de todas |
-| **Administrador da empresa** | Só a própria empresa: conexões, usuários, eventos e aparência |
+| **Super administrador** (você) | Tudo: Conexões, Usuários, Eventos do sistema, Aparência e Empresas de todas as empresas |
+| **Administrador da empresa** | Pedido, Histórico e **Usuários** da própria empresa (Ctrl+Shift+B) |
 | **Operador** | Gera pré-vendas e vê o histórico da própria empresa. Não abre a área administrativa |
 
 ### Área administrativa (Ctrl + Shift + B)
 - **Super administrador** logado: tudo já aparece liberado, sem atalho e sem tempo limite.
 - Em qualquer tela, aperte **Ctrl + Shift + B** e informe e-mail e senha de um administrador. (administradores das empresas)
-- Aparecem as abas **Conexões, Usuários, Eventos do sistema, Aparência** (e **Empresas** para o super administrador).
+- O administrador da empresa vê a aba **Usuários**. **Conexões, Eventos do sistema, Aparência e Empresas** são só do super administrador.
 - É uma sessão separada: dá para abrir no computador de um operador sem desconectar ele; tudo o que for feito fica
   registrado no nome do administrador. Fecha sozinha após **10 minutos sem uso** ou em **Fechar administração**.
 - Tentativas de operador ou senha errada ficam registradas nos eventos como **Negado**.
@@ -136,29 +136,46 @@ npm run demo       # só as telas, com dados simulados: http://localhost:5199/?l
 npm run dist       # gera dist/GerarPreVenda-Setup-<versão>.exe
 ```
 
-## 4. Atualização automática (nuvem)
+## 4. Publicar pelo GitHub (atualização automática)
 
-As atualizações saem pelo **GitHub Releases** do repositório `ramonbfpatrimonio/gerar-pre-venda`
-(configurado em `electron-builder.yml`, campo `publish`).
+As atualizações saem pelo **GitHub Releases** de `ramonbfpatrimonio/gerar-pre-venda`. O instalador é
+gerado **pelo próprio GitHub** (roteiro `.github/workflows/release.yml`), então você não precisa gerar
+nada no seu computador nem ter token.
 
-1. Crie o repositório **público** `gerar-pre-venda` na conta `ramonbfpatrimonio`.
-   Se ele for privado, o programa instalado recebe erro 404 ao procurar atualizações.
-2. Crie um token do GitHub com permissão `repo` e deixe-o na variável `GH_TOKEN`:
-   ```powershell
-   setx GH_TOKEN "ghp_xxxxxxxx"
+### Ligar a pasta ao GitHub (uma vez)
+1. No GitHub, crie o repositório **público** `gerar-pre-venda` (sem README).
+   Precisa ser público: o programa instalado baixa as atualizações sem senha.
+2. No `cmd`, dentro da pasta do projeto:
    ```
-3. A cada versão nova: aumente `"version"` no `package.json` (ex.: 1.0.0 → 1.0.1) e rode
-   ```bash
-   npm run release
+   git init -b main
+   git add -A
+   git commit -m "Gerar Pré-Venda"
+   git remote add origin https://github.com/ramonbfpatrimonio/gerar-pre-venda.git
+   git push -u origin main
    ```
+   (Se a pasta já veio com o Git, pule `git init` e o primeiro commit.)
+3. No GitHub: **Settings → Actions → General → Workflow permissions → Read and write permissions → Save**.
+
+### Toda versão nova
+Dê dois cliques em **`publicar.cmd`** (ou `publicar.cmd minor` para 1.2.x → 1.3.0). Ele:
+1. confere o código (typecheck e testes);
+2. guarda as alterações, sobe a versão no `package.json` e cria a tag (ex.: `v1.2.7`);
+3. envia ao GitHub.
+
+O GitHub gera o instalador em uns 5 minutos (acompanhe em **Actions**) e publica o Release.
 Os programas instalados verificam ao abrir e a cada 4 horas, baixam em segundo plano e mostram
-**"Reiniciar e atualizar"** na faixa superior.
+**"Reiniciar e atualizar"**; se ninguém clicar, instala ao fechar o programa.
+
+O primeiro computador de cada cliente é instalado com o `.exe` do Release
+(`GerarPreVenda-Setup-x.y.z.exe`, em **Releases** no GitHub). Depois disso, tudo é automático.
+
+Gerar localmente continua possível: `npm run dist` (só o instalador, em `dist\`).
 
 ---
 
 ## 5. Conexões com o SQL Server
 
-Cadastre na aba **Conexões** (só administradores). Use **Testar conexão**: o programa lista os
+Cadastre na aba **Conexões** (só o super administrador). Use **Testar conexão**: o programa lista os
 bancos, confere as tabelas e colunas usadas, as permissões do usuário e mostra o que faltar.
 
 | Situação | Como preencher |

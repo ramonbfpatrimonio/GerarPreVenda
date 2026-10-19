@@ -26,7 +26,7 @@ export function Faixa({ irPara }: { irPara: (aba: 'conexoes' | 'empresas') => vo
   const sub =
     status.estado === 'on' ? `${ativa?.servidor}${ativa?.instancia ? '\\' + ativa.instancia : ''} / ${ativa?.banco}` :
     status.estado === 'off' ? 'Sem conexão com o banco: clique para trocar ou testar' :
-    status.estado === 'sem-senha' ? 'Falta a senha do SQL neste computador (peça ao administrador)' :
+    status.estado === 'sem-senha' ? 'Falta a senha do SQL neste computador (peça ao super administrador)' :
     status.estado === 'verificando' ? 'Conectando…' : 'Escolha em qual banco trabalhar'
 
   return (
@@ -90,7 +90,7 @@ export function Faixa({ irPara }: { irPara: (aba: 'conexoes' | 'empresas') => vo
           {perfis.length === 0 && <div className="grupo">Nenhuma conexão cadastrada para {empresaAtual?.nome ?? 'esta empresa'}.</div>}
           <div style={{ borderTop: '1px solid var(--linha)', marginTop: 6, paddingTop: 6 }}>
             {ativa && <button onClick={() => { verificar(); setMenu(null) }}><Icone nome="atualizar" tamanho={16} /> Testar a conexão de novo</button>}
-            {admin.perfil && <button onClick={() => { irPara('conexoes'); setMenu(null) }}><Icone nome="banco" tamanho={16} /> Gerenciar conexões</button>}
+            {admin.ehSuper && <button onClick={() => { irPara('conexoes'); setMenu(null) }}><Icone nome="banco" tamanho={16} /> Gerenciar conexões</button>}
           </div>
         </div>
       )}

@@ -1,0 +1,37 @@
+# Publica uma versão nova sozinho.
+# Quando uma tag "v1.2.7" (por exemplo) chega no GitHub, este roteiro roda num
+# Windows do próprio GitHub: confere o código, gera o instalador e cria o Release.
+# Os programas instalados encontram o Release e se atualizam sozinhos.
+name: Publicar versão
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Conferir o código
+        run: |
+          npm run typecheck
+          npm test
+
+      - name: Gerar instalador e publicar o Release
+        run: npx electron-vite build && npx electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
