@@ -12,11 +12,26 @@ export type EstadoAtualizacao =
   | { tipo: 'atualizado' }
   | { tipo: 'erro'; mensagem: string }
 
+// Fluxo: ao achar versão nova, o programa pergunta "Atualizar agora ou depois".
+// "Agora" baixa em segundo plano; terminado, pede para reiniciar e volta já
+// atualizado (instalação silenciosa, sem abrir o instalador).
+// "Depois": pergunta de novo na próxima verificação; se já baixou, instala ao fechar.
 export function configurarAtualizacao(janela: () => BrowserWindow | null) {
-  const enviar = (e: EstadoAtualizacao) => janela()?.webContents.send('atualizacao:estado', e)
+  let ultimo: EstadoAtualizacao | null = null
+  const enviar = (e: EstadoAtualizacao) => {
+    ultimo = e
+    janela()?.webContents.send('atualizacao:estado', e)
+  }
 
   ipcMain.handle('atualizacao:versao', () => app.getVersion())
-  ipcMain.handle('atualizacao:instalar', () => autoUpdater.quitAndInstall(false, true))
+  ipcMain.handle('atualizacao:estadoAtual', () => ultimo)
+  ipcMain.handle('atualizacao:baixar', async () => {
+    if (!app.isPackaged) return
+    enviar({ tipo: 'baixando', percentual: 0 })
+    await autoUpdater.downloadUpdate().catch((e) => enviar({ tipo: 'erro', mensagem: e?.message ?? String(e) }))
+  })
+  // silencioso (sem a tela do instalador) e abre o programa de novo no fim
+  ipcMain.handle('atualizacao:instalar', () => setImmediate(() => autoUpdater.quitAndInstall(true, true)))
   ipcMain.handle('atualizacao:verificar', async () => {
     if (!app.isPackaged) return { ok: false, erro: 'Atualização só funciona no programa instalado.' }
     await autoUpdater.checkForUpdates().catch(() => undefined)
@@ -25,10 +40,10 @@ export function configurarAtualizacao(janela: () => BrowserWindow | null) {
 
   if (!app.isPackaged) return
 
-  autoUpdater.autoDownload = true
-  autoUpdater.autoInstallOnAppQuit = true
-  autoUpdater.on('checking-for-update', () => enviar({ tipo: 'verificando' }))
-  autoUpdater.on('update-available', (i) => enviar({ tipo: 'disponivel', versao: i.version }))
+  autoUpdater.autoDownload = false // só baixa quando a pessoa escolher "Atualizar agora"
+  autoUpdater.autoInstallOnAppQuit = true // baixou e não reiniciou: instala ao fechar
+  autoUpdater.on('checking-for-update', () => ultimo?.tipo !== 'pronta' && ultimo?.tipo !== 'baixando' && enviar({ tipo: 'verificando' }))
+  autoUpdater.on('update-available', (i) => ultimo?.tipo !== 'pronta' && ultimo?.tipo !== 'baixando' && enviar({ tipo: 'disponivel', versao: i.version }))
   autoUpdater.on('update-not-available', () => enviar({ tipo: 'atualizado' }))
   autoUpdater.on('download-progress', (p) => enviar({ tipo: 'baixando', percentual: Math.round(p.percent) }))
   autoUpdater.on('update-downloaded', (i) => enviar({ tipo: 'pronta', versao: i.version }))

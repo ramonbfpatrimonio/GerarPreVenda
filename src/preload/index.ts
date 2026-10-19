@@ -53,6 +53,8 @@ const api: Api = {
   atualizacao: {
     versao: () => ipcRenderer.invoke('atualizacao:versao'),
     instalar: () => ipcRenderer.invoke('atualizacao:instalar'),
+    baixar: () => ipcRenderer.invoke('atualizacao:baixar'),
+    estadoAtual: () => ipcRenderer.invoke('atualizacao:estadoAtual'),
     verificar: () => ipcRenderer.invoke('atualizacao:verificar'),
     aoMudar: (fn) => {
       const ouvinte = (_: unknown, estado: Parameters<typeof fn>[0]) => fn(estado)

@@ -417,3 +417,17 @@ p { margin: 0; }
 .menu-exibir-lista small { color: var(--grafite); font-size: 11.5px; border-top: 1px solid var(--linha); padding-top: 6px; }
 .etiqueta.localizado { background: #eef6f7; color: var(--acao); border: 1px solid #c6dfe2; font-weight: 500; }
 .etiqueta + .etiqueta { margin-left: 4px; }
+
+/* caixinhas dos pedidos: laranja = gerado em parte, verde = tudo gerado */
+.pedido-chip.parcial { background: #ffe8d1; border-color: #f0a050; }
+.pedido-chip.parcial b { color: #a24d00; }
+.pedido-chip.gerado { background: #dff3e5; border-color: #6cc08a; }
+.pedido-chip.gerado b { color: #1d6b38; }
+.balao-pedido { position: fixed; z-index: 60; background: #fff; color: var(--tinta); border: 1px solid var(--linha-forte); border-radius: 6px; padding: 6px 10px; font-size: 12.5px; line-height: 1.5; box-shadow: 0 6px 18px rgba(0,0,0,.12); pointer-events: none; white-space: nowrap; }
+
+/* atualização do programa */
+.botao-faixa.baixando { display: inline-flex; align-items: center; gap: 8px; }
+.barra-mini { width: 60px; height: 6px; border-radius: 3px; background: rgba(255,255,255,.3); overflow: hidden; display: inline-block; }
+.barra-mini span { display: block; height: 100%; background: #fff; transition: width .3s; }
+.barra-progresso { height: 10px; border-radius: 5px; background: var(--papel); border: 1px solid var(--linha); overflow: hidden; margin: 6px 0 4px; }
+.barra-progresso span { display: block; height: 100%; background: var(--acao); transition: width .3s; }

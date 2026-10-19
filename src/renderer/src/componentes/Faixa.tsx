@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useConexoes, useSessao } from '../contexto'
 import { useAdmin } from '../admin'
 import logoPadrao from '../assets/logo.png'
-import type { EstadoAtualizacao } from '../../../preload/api'
+import { Atualizacao } from './Atualizacao'
 import { Icone } from './Icone'
 
 /** Faixa superior na cor da conexão ativa: mostra empresa, banco, internet e usuário. */
@@ -11,10 +11,8 @@ export function Faixa({ irPara }: { irPara: (aba: 'conexoes' | 'empresas') => vo
   const { perfil, sair, empresaAtual, empresas, escolherEmpresa, ehSuper, internet, offline, pendentes, aparencia } = useSessao()
   const admin = useAdmin()
   const [menu, setMenu] = useState<'banco' | 'empresa' | null>(null)
-  const [atualizacao, setAtualizacao] = useState<EstadoAtualizacao | null>(null)
   const ref = useRef<HTMLDivElement>(null)
 
-  useEffect(() => window.api.atualizacao.aoMudar(setAtualizacao), [])
   useEffect(() => {
     if (!menu) return
     const fora = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setMenu(null)
@@ -108,12 +106,7 @@ export function Faixa({ irPara }: { irPara: (aba: 'conexoes' | 'empresas') => vo
         </span>
       )}
       {internet && pendentes > 0 && <span className="selo-offline">Enviando {pendentes} para o histórico…</span>}
-      {atualizacao?.tipo === 'baixando' && <span className="mini">Baixando atualização {atualizacao.percentual}%</span>}
-      {atualizacao?.tipo === 'pronta' && (
-        <button className="botao-faixa atualizar" onClick={() => window.api.atualizacao.instalar()}>
-          Reiniciar e atualizar para {atualizacao.versao}
-        </button>
-      )}
+      <Atualizacao />
       {perfil && (
         <div className="usuario">
           {perfil.nome}

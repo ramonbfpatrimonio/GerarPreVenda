@@ -6,7 +6,7 @@ import type { Api, RegistroFila } from '../../../preload/api'
 import type { DadosConexaoNuvem, PerfilConexao, ProdutoErp, ResultadoPdf } from '@shared/tipos'
 import { REGRAS_PADRAO } from '@shared/tipos'
 import type { Empresa, Evento, NovoEvento, Nuvem, Perfil, RegistroHistorico } from './nuvem'
-import type { AparenciaLocal } from '../../../preload/api'
+import type { AparenciaLocal, EstadoAtualizacao } from '../../../preload/api'
 import pedidosDemo from './demo-pedidos.json'
 
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -86,6 +86,7 @@ const historico: RegistroHistorico[] = [
   }
 ]
 const fila: RegistroFila[] = []
+const ouvintesAtualizacao = new Set<(e: EstadoAtualizacao) => void>()
 
 let aparenciaLocal: AparenciaLocal | null = null
 
@@ -230,9 +231,23 @@ export function instalarApiDemo() {
     },
     atualizacao: {
       versao: async () => '1.2.6',
-      instalar: async () => undefined,
+      instalar: async () => {
+        alert('(demonstração) O programa fecharia, instalaria e abriria de novo já atualizado.')
+      },
       verificar: async () => ({ ok: true }),
-      aoMudar: () => () => undefined
+      estadoAtual: async () => null,
+      baixar: async () => {
+        for (let p = 0; p <= 100; p += 20) {
+          ouvintesAtualizacao.forEach((f) => f({ tipo: 'baixando', percentual: p }))
+          await espera(400)
+        }
+        ouvintesAtualizacao.forEach((f) => f({ tipo: 'pronta', versao: '1.2.7' }))
+      },
+      aoMudar: (fn) => {
+        ouvintesAtualizacao.add(fn)
+        if (params.has('atualizacao')) setTimeout(() => fn({ tipo: 'disponivel', versao: '1.2.7' }), 1500)
+        return () => ouvintesAtualizacao.delete(fn)
+      }
     }
   }
   ;(window as unknown as { api: Api }).api = api

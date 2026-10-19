@@ -80,6 +80,8 @@ export interface Api {
   atualizacao: {
     versao(): Promise<string>
     instalar(): Promise<void>
+    baixar(): Promise<void>
+    estadoAtual(): Promise<EstadoAtualizacao | null>
     verificar(): Promise<{ ok: boolean; erro?: string }>
     aoMudar(fn: (estado: EstadoAtualizacao) => void): () => void
   }
