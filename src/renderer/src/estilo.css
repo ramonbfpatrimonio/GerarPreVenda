@@ -614,3 +614,29 @@ h2 { letter-spacing: -0.015em; }
 .pedido-chip.gerado b { color: #17643a; }
 .pedido-chip.parcial.atual { box-shadow: inset 4px 0 0 #ec8f3a, 0 0 0 2px #ec8f3a, 0 6px 16px -6px rgba(236,143,58,0.7); }
 .pedido-chip.gerado.atual { box-shadow: inset 4px 0 0 #4fb377, 0 0 0 2px #4fb377, 0 6px 16px -6px rgba(79,179,119,0.7); }
+
+/* aviso de layout de pedido indisponível */
+.layout-indisponivel { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 10px 6px 4px; }
+.layout-indisponivel h2 { font-size: 19px; }
+.layout-indisponivel p { max-width: 420px; }
+.icone-layout { width: 64px; height: 64px; border-radius: 18px; display: grid; place-items: center; color: #fff; background: var(--gradiente-gpv); box-shadow: 0 10px 26px -10px rgba(23,71,255,0.7); margin-bottom: 4px; }
+.icone-layout svg { width: 32px; height: 32px; }
+.arquivo-layout { font-weight: 600; background: var(--papel); border: 1px solid var(--linha); border-radius: 999px; padding: 3px 12px; font-size: 13px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* pré-carregamento: logo pulsando e barra de 4 segundos */
+.preloader { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; color: #e7eaf0;
+  background: radial-gradient(70% 60% at 50% 45%, #0e1a3d 0%, #070c1a 60%, #04070f 100%);
+  transition: opacity .45s ease, visibility .45s; }
+.preloader.saindo { opacity: 0; visibility: hidden; }
+.preloader .centro { display: flex; flex-direction: column; align-items: center; gap: 22px; }
+.preloader .logo-pulso { position: relative; width: 132px; height: 132px; }
+.preloader .logo-pulso img { position: relative; width: 100%; height: 100%; object-fit: contain; border-radius: 28px; animation: pulsar 1.4s ease-in-out infinite; }
+.preloader .logo-pulso::before { content: ''; position: absolute; inset: -14px; border-radius: 40px; background: radial-gradient(circle, rgba(24,180,255,0.45), rgba(23,71,255,0) 70%); animation: halo 1.4s ease-in-out infinite; }
+.preloader .nome { font-size: 15px; font-weight: 600; letter-spacing: .04em; color: #c9d0dc; }
+.preloader .trilho { width: 240px; height: 4px; border-radius: 999px; background: rgba(255,255,255,0.08); overflow: hidden; }
+.preloader .trilho span { display: block; height: 100%; width: 0; border-radius: 999px; background: var(--gradiente-gpv); box-shadow: 0 0 12px rgba(24,180,255,0.8); animation: encher 4s cubic-bezier(.45,.05,.35,1) forwards; }
+.preloader .pct { font-size: 12px; color: #7f8aa3; font-variant-numeric: tabular-nums; margin-top: -12px; }
+@keyframes pulsar { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+@keyframes halo { 0%, 100% { opacity: .35; transform: scale(.92); } 50% { opacity: 1; transform: scale(1.08); } }
+@keyframes encher { to { width: 100%; } }
+@media (prefers-reduced-motion: reduce) { .preloader .trilho span { animation-duration: 4s !important; } }

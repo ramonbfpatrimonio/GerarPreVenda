@@ -74,6 +74,7 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
   const [lendoPdf, setLendoPdf] = useState(false)
   const [buscando, setBuscando] = useState(false)
   const [arrastando, setArrastando] = useState(false)
+  const [layoutIndisponivel, setLayoutIndisponivel] = useState<string | null>(null) // nome do PDF sem layout cadastrado
   // filtros da lista (menu "Exibir")
   const [exibir, setExibir] = useState({ localizados: false, naoLocalizados: false, ocultarEnviados: false })
   useEffect(() => {
@@ -98,6 +99,8 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
   // ---------------- abrir PDF
   const carregarResultado = (r: ResultadoPdf | null) => {
     if (!r) return
+    // PDF de um layout que o sistema ainda não tem: aviso no centro da tela
+    if (r.pedidos.length === 0 && !r.modelo) return setLayoutIndisponivel(r.arquivo)
     r.avisos.forEach((a) => avisar(a, 'erro'))
     if (r.pedidos.length === 0) return
     setArquivo(r)
@@ -423,9 +426,25 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
   const refArquivo = useRef<HTMLDivElement>(null)
   if (!visivel) return null
 
+  const janelaLayout = (
+    <Modal aberto={!!layoutIndisponivel} aoFechar={() => setLayoutIndisponivel(null)} rotulo="Layout de pedido indisponível"
+      botoes={<button className="botao primario" onClick={() => setLayoutIndisponivel(null)} autoFocus>Entendi</button>}>
+      <div className="layout-indisponivel">
+        <div className="icone-layout" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" /><path d="M12 12v3M12 18h.01" /></svg>
+        </div>
+        <h2>Layout de pedido indisponível</h2>
+        <p>O sistema ainda não tem o layout deste PDF, por isso não consegue ler o pedido.</p>
+        <p className="arquivo-layout">{layoutIndisponivel}</p>
+        <p className="fraco">Entre em contato com o suporte e envie este PDF para que o layout seja incluído no sistema.</p>
+      </div>
+    </Modal>
+  )
+
   if (!est) {
     return (
       <div className="pagina">
+        {janelaLayout}
         <div
           ref={refArquivo}
           className={`vazio ${arrastando ? 'arrastando' : ''}`}
@@ -463,6 +482,7 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
 
   return (
     <div className="pagina cheia">
+      {janelaLayout}
       <div className="pedido-barra-arquivo">
           <div className="arquivo-linha">
             {est.origem === 'pdf' ? <span className="nome-arquivo">{est.arquivo}</span> : <span className="nome-arquivo">Pedido digitado</span>}

@@ -15,7 +15,7 @@ function criarJanela() {
     show: false,
     autoHideMenuBar: true,
     title: 'Gerar Pré-Venda',
-    backgroundColor: '#f4f5f7',
+    backgroundColor: '#070c1a',
     icon: join(__dirname, '../../resources', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
