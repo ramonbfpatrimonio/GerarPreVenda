@@ -52,7 +52,7 @@ export function lerPaginas(paginas: PaginaPdf[], arquivo: string): ResultadoPdf 
   if (r.pedidos.length === 0) {
     r.modelo = undefined
     r.avisos.push(
-      'Modelo de pedido não reconhecido. Veja na aba "Modelos de Pedido" os modelos que o programa lê. Verifique se o PDF tem texto (não escaneado) ou envie este modelo para ser incluído.'
+      'Modelo de pedido não reconhecido. Verifique se o PDF tem texto (não escaneado) ou envie este modelo para ser incluído.'
     )
   }
   return r

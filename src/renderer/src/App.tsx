@@ -14,11 +14,11 @@ import { Pagina_Modelos } from './paginas/Modelos'
 import { AdminProvider, useAdmin } from './admin'
 
 export type Aba = 'pedido' | 'historico' | 'modelos' | 'conexoes' | 'usuarios' | 'eventos' | 'aparencia' | 'empresas'
-const ABAS_ADMIN: Aba[] = ['conexoes', 'usuarios', 'eventos', 'aparencia', 'empresas']
+const ABAS_ADMIN: Aba[] = ['conexoes', 'usuarios', 'eventos', 'aparencia', 'empresas', 'modelos']
 
 function abaInicial(): Aba {
   const a = new URLSearchParams(location.search).get('aba') as Aba | null
-  return a && ['pedido', 'historico', 'modelos', ...ABAS_ADMIN].includes(a) ? a : 'pedido'
+  return a && ['pedido', 'historico', ...ABAS_ADMIN].includes(a) ? a : 'pedido'
 }
 
 function Casca() {
@@ -44,19 +44,19 @@ function Programa() {
 
   // Área administrativa fechou: volta para o pedido se estava numa aba oculta
   useEffect(() => {
-    if ((!admin.perfil && ABAS_ADMIN.includes(aba)) || (!admin.ehSuper && ['conexoes', 'eventos', 'aparencia', 'empresas'].includes(aba))) setAba('pedido')
+    if ((!admin.perfil && ABAS_ADMIN.includes(aba)) || (!admin.ehSuper && ['conexoes', 'eventos', 'aparencia', 'empresas', 'modelos'].includes(aba))) setAba('pedido')
   }, [admin.perfil, admin.ehSuper]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const itens: { id: Aba; rotulo: string; icone: string; mostrar: boolean }[] = [
     { id: 'pedido', rotulo: 'Pedido', icone: 'pedido', mostrar: true },
     { id: 'historico', rotulo: 'Histórico', icone: 'historico', mostrar: true },
-    { id: 'modelos', rotulo: 'Modelos de Pedido', icone: 'modelo', mostrar: true },
     // administrador da empresa: só Usuários; o resto é do super administrador
     { id: 'conexoes', rotulo: 'Conexões', icone: 'banco', mostrar: admin.ehSuper },
     { id: 'usuarios', rotulo: 'Usuários', icone: 'usuarios', mostrar: !!admin.perfil },
     { id: 'eventos', rotulo: 'Eventos do sistema', icone: 'eventos', mostrar: admin.ehSuper },
     { id: 'aparencia', rotulo: 'Aparência', icone: 'imagem', mostrar: admin.ehSuper },
-    { id: 'empresas', rotulo: 'Empresas', icone: 'empresa', mostrar: admin.ehSuper }
+    { id: 'empresas', rotulo: 'Empresas', icone: 'empresa', mostrar: admin.ehSuper },
+    { id: 'modelos', rotulo: 'Modelos de Pedido', icone: 'modelo', mostrar: admin.ehSuper }
   ]
   const visiveis = itens.filter((i) => i.mostrar)
 
@@ -67,7 +67,7 @@ function Programa() {
         <nav className="nav" aria-label="Menu">
           {visiveis.map((i, n) => (
             <div key={i.id}>
-              {n === 3 && <div className="nav-separador">Administração</div>}
+              {n === 2 && <div className="nav-separador">Administração</div>}
               <button className={aba === i.id ? 'ativo' : ''} onClick={() => setAba(i.id)} aria-current={aba === i.id ? 'page' : undefined}>
                 <Icone nome={i.icone} /> {i.rotulo}
               </button>
@@ -83,11 +83,11 @@ function Programa() {
         {/* O pedido fica montado o tempo todo para não perder o que foi feito ao trocar de aba. */}
         <Pagina_Pedido visivel={aba === 'pedido'} />
         <Pagina_Historico visivel={aba === 'historico'} />
-        <Pagina_Modelos visivel={aba === 'modelos'} />
         {admin.ehSuper && aba === 'conexoes' && <Pagina_Conexoes />}
         {admin.perfil && <Pagina_Usuarios visivel={aba === 'usuarios'} />}
         {admin.ehSuper && <Pagina_Eventos visivel={aba === 'eventos'} />}
         {admin.ehSuper && <Pagina_Aparencia visivel={aba === 'aparencia'} />}
+        {admin.ehSuper && <Pagina_Modelos visivel={aba === 'modelos'} />}
         {admin.ehSuper && <Pagina_Empresas visivel={aba === 'empresas'} irParaPedido={() => setAba('pedido')} />}
       </div>
     </div>
