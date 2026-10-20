@@ -457,3 +457,6 @@ p { margin: 0; }
 .usos-modelo { margin: 8px 0 0; padding-left: 18px; font-size: 13px; columns: 2; column-gap: 28px; }
 .usos-modelo li { margin-bottom: 3px; break-inside: avoid; }
 @media (max-width: 1150px) { .grade-modelos { grid-template-columns: 1fr; } .fichas-modelo { grid-template-columns: 1fr; } .usos-modelo { columns: 1; } }
+/* login: logo e nome centralizados */
+.login .lado-form > .logo-login { align-self: center; }
+.login .lado-form > h1 { text-align: center; }
