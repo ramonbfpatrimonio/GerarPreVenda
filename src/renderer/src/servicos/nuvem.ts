@@ -130,10 +130,17 @@ export function definirEstacao(nome: string) {
   estacao = (nome || '').normalize('NFD').replace(/[^\x20-\x7E]/g, '').slice(0, 60)
 }
 
+// O login vale só enquanto o programa está aberto: a sessão fica no
+// sessionStorage, que some quando o programa é fechado (ao reabrir, pede login).
+// Também apaga a sessão que versões antigas guardavam no localStorage.
+try {
+  Object.keys(localStorage).filter((k) => k.startsWith('sb-') && k.endsWith('-auth-token')).forEach((k) => localStorage.removeItem(k))
+} catch { /* sem acesso ao armazenamento: segue */ }
+
 function novoCliente(persistir: boolean): SupabaseClient {
   return createClient(URL, CHAVE, {
     auth: persistir
-      ? { persistSession: true, autoRefreshToken: true }
+      ? { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
       : { persistSession: false, autoRefreshToken: true, storageKey: 'gpv-admin' },
     global: { headers: { 'x-estacao': estacao } }
   })
