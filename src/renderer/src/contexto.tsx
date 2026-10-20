@@ -432,7 +432,7 @@ export function ConexoesProvider({ children }: { children: ReactNode }) {
   }, [verificar])
 
   useEffect(() => {
-    document.documentElement.style.setProperty('--banco', ativa?.cor ?? '#5a6472')
+    document.documentElement.style.setProperty('--banco', ativa?.cor ?? '#0e1630')
   }, [ativa?.cor])
 
   const selecionar = useCallback(

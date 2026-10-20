@@ -10,16 +10,29 @@
    planilha: laranja = ST, amarelo = convertido, verde = enviado.
    ------------------------------------------------------------------ */
 :root {
-  --papel: #f4f5f3;
+  /* paleta GPV: azul-noite do fundo, azul elétrico e ciano do "G", prata do "PV" */
+  --noite: #070c1a;
+  --noite-2: #0e1630;
+  --noite-3: #18223f;
+  --prata: #c9d0dc;
+  --prata-apagada: #7f8aa3;
+  --eletrico: #1747ff;
+  --ciano: #18b4ff;
+  --gradiente-gpv: linear-gradient(90deg, #1747ff 0%, #18b4ff 100%);
+  --papel: #f2f4f8;
   --superficie: #ffffff;
-  --tinta: #18212c;
-  --grafite: #5a6472;
-  --apagado: #8a939f;
-  --linha: #dde1e5;
-  --linha-forte: #c5ccd3;
-  --acao: #0e5a63;
-  --acao-escura: #0a454c;
-  --acao-clara: #e3f0f1;
+  --tinta: #0f1730;
+  --grafite: #57617a;
+  --apagado: #8b94a8;
+  --linha: #e1e5ee;
+  --linha-forte: #c8cfdc;
+  --acao: #1747ff;
+  --acao-escura: #0f33cc;
+  --acao-clara: #e8eeff;
+  --acao-borda: #c3d1ff;
+  --foco: rgba(24, 180, 255, 0.35);
+  --sombra-1: 0 1px 2px rgba(15, 23, 48, 0.06), 0 1px 1px rgba(15, 23, 48, 0.04);
+  --sombra-2: 0 10px 30px -8px rgba(15, 23, 48, 0.22), 0 2px 6px rgba(15, 23, 48, 0.08);
   --st: #b9530b;
   --st-fundo: #fff1e5;
   --convertido: #fff5c4;
@@ -29,8 +42,9 @@
   --erro-fundo: #fdecea;
   --aviso: #7a5200;
   --aviso-fundo: #fff6dc;
-  --banco: #5a6472;
-  --raio: 6px;
+  --banco: #0e1630;
+  --raio: 8px;
+  --raio-g: 12px;
   --fonte: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
 }
 
@@ -343,7 +357,7 @@ p { margin: 0; }
 
 /* ------------------------------------------------------------------ login (fundo 3/4 + formulário) */
 .login { min-height: 100%; height: 100%; display: grid; grid-template-columns: 3fr minmax(360px, 1fr); }
-.fundo-login { position: relative; overflow: hidden; background-color: #0b3d44; min-width: 0; min-height: 0; }
+.fundo-login { position: relative; overflow: hidden; background-color: var(--noite); min-width: 0; min-height: 0; }
 .fundo-login .fundo-imagem { position: absolute; inset: 0; background-repeat: no-repeat; background-position: center; background-size: cover; }
 .fundo-login.inteira .fundo-imagem { background-size: contain; }
 .fundo-login .fundo-borrado { position: absolute; inset: -60px; background-repeat: no-repeat; background-position: center; background-size: cover; filter: blur(36px) brightness(0.72) saturate(1.1); transform: scale(1.08); }
@@ -374,7 +388,7 @@ p { margin: 0; }
 .caixa.bloco h2 { margin: 0; font-size: 16px; }
 .caixa.bloco p { margin: 0; }
 .grade-aparencia { display: grid; grid-template-columns: minmax(300px, 2fr) minmax(0, 3fr); gap: 16px; align-items: start; }
-.miniatura { position: relative; border-radius: var(--raio); border: 1px solid var(--linha-forte); background-size: cover; background-position: center; background-color: #0b3d44; }
+.miniatura { position: relative; border-radius: var(--raio); border: 1px solid var(--linha-forte); background-size: cover; background-position: center; background-color: var(--noite); }
 .miniatura.logo { height: 120px; background-size: contain; background-repeat: no-repeat; background-color: #fff; background-origin: content-box; padding: 14px; }
 .miniatura span { position: absolute; right: 8px; bottom: 8px; font-size: 11px; background: rgba(0,0,0,.55); color: #fff; padding: 2px 7px; border-radius: 10px; }
 @media (max-width: 1250px) { .grade-aparencia { grid-template-columns: 1fr; } }
@@ -412,10 +426,10 @@ p { margin: 0; }
 .menu-exibir { position: relative; }
 .menu-exibir summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--linha-forte); background: var(--superficie); border-radius: var(--raio); padding: 6px 11px; font-size: 13px; font-weight: 500; user-select: none; }
 .menu-exibir summary::-webkit-details-marker { display: none; }
-.menu-exibir summary.ativo { border-color: var(--acao); color: var(--acao); background: #eef6f7; }
+.menu-exibir summary.ativo { border-color: var(--acao); color: var(--acao); background: var(--acao-clara); }
 .menu-exibir-lista { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; min-width: 260px; background: var(--superficie); border: 1px solid var(--linha-forte); border-radius: var(--raio); box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
 .menu-exibir-lista small { color: var(--grafite); font-size: 11.5px; border-top: 1px solid var(--linha); padding-top: 6px; }
-.etiqueta.localizado { background: #eef6f7; color: var(--acao); border: 1px solid #c6dfe2; font-weight: 500; }
+.etiqueta.localizado { background: var(--acao-clara); color: var(--acao); border: 1px solid var(--acao-borda); font-weight: 500; }
 .etiqueta + .etiqueta { margin-left: 4px; }
 
 /* caixinhas dos pedidos: laranja = gerado em parte, verde = tudo gerado */
@@ -437,7 +451,7 @@ p { margin: 0; }
 .lista-modelos { padding: 6px; display: flex; flex-direction: column; gap: 2px; }
 .lista-modelos button { display: flex; gap: 10px; align-items: center; text-align: left; border: 0; background: none; padding: 9px 10px; border-radius: var(--raio); cursor: pointer; }
 .lista-modelos button:hover { background: var(--papel); }
-.lista-modelos button.atual { background: #e6f1f2; }
+.lista-modelos button.atual { background: var(--acao-clara); }
 .lista-modelos button b { display: block; font-weight: 600; }
 .lista-modelos button small { color: var(--grafite); font-size: 11.5px; }
 .numero-modelo { flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--acao); color: #fff; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
@@ -460,3 +474,143 @@ p { margin: 0; }
 /* login: logo e nome centralizados */
 .login .lado-form > .logo-login { align-self: center; }
 .login .lado-form > h1 { text-align: center; }
+
+/* ==================================================================
+   Repaginada GPV
+   Cromo em azul-noite (menu lateral), destaque em azul elétrico e o
+   gradiente azul→ciano do "G" usado só como fio de assinatura: no item
+   ativo do menu, sob a faixa superior e no progresso. O resto é calmo:
+   cinza-azulado frio, superfícies brancas, cantos mais suaves.
+   ================================================================== */
+::selection { background: rgba(23, 71, 255, 0.18); }
+:focus-visible { outline: 2px solid var(--ciano); outline-offset: 2px; }
+h1 { font-size: 23px; letter-spacing: -0.02em; }
+h2 { letter-spacing: -0.015em; }
+
+/* barras de rolagem finas, frias */
+* { scrollbar-width: thin; scrollbar-color: #c3cad8 transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #c8cfdc; border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: #9fa9bd; background-clip: padding-box; border: 2px solid transparent; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* faixa: continua na cor da conexão, com brilho suave e o fio azul→ciano embaixo */
+.faixa {
+  background:
+    var(--gradiente-gpv) bottom / 100% 2px no-repeat,
+    linear-gradient(180deg, rgba(255,255,255,0.07), rgba(0,0,0,0.14)),
+    var(--banco);
+  height: 56px;
+}
+.seletor-banco { border-radius: 10px; background: rgba(255,255,255,0.10); border-color: rgba(255,255,255,0.18); backdrop-filter: blur(6px); }
+.seletor-banco:hover { background: rgba(255,255,255,0.18); }
+.faixa .botao-faixa { border-radius: 999px; padding: 5px 13px; border-color: rgba(255,255,255,0.28); }
+.faixa .atualizar { color: var(--eletrico); box-shadow: 0 0 0 3px rgba(24,180,255,0.35); }
+.faixa .logo-faixa { background: rgba(255,255,255,0.08); border-radius: 9px; }
+.luz.on { background: #3ee08f; box-shadow: 0 0 0 2px rgba(255,255,255,0.3), 0 0 8px rgba(62,224,143,0.8); }
+.luz.off { box-shadow: 0 0 0 2px rgba(255,255,255,0.3), 0 0 8px rgba(255,138,128,0.8); }
+.selo-admin { border-radius: 999px; }
+.menu-bancos { border-radius: var(--raio-g); border-color: var(--linha); box-shadow: var(--sombra-2); top: 52px; }
+.menu-bancos button { border-radius: var(--raio); }
+.menu-bancos button:hover, .menu-bancos button.atual { background: var(--acao-clara); }
+
+/* menu lateral em azul-noite */
+.corpo { grid-template-columns: 208px 1fr; }
+.nav {
+  background: linear-gradient(180deg, var(--noite-2) 0%, var(--noite) 100%);
+  border-right: 0;
+  padding: 16px 10px;
+  gap: 3px;
+}
+.nav button { position: relative; color: var(--prata-apagada); padding: 10px 12px; border-radius: 10px; transition: background .15s, color .15s; }
+.nav button svg { opacity: .85; }
+.nav button:hover { background: rgba(255,255,255,0.05); color: #e7eaf0; }
+.nav button.ativo {
+  color: #fff; font-weight: 600;
+  background: linear-gradient(90deg, rgba(23,71,255,0.30) 0%, rgba(24,180,255,0.06) 100%);
+  box-shadow: inset 0 0 0 1px rgba(24,180,255,0.16);
+}
+.nav button.ativo::before {
+  content: ''; position: absolute; left: -10px; top: 8px; bottom: 8px; width: 3px;
+  border-radius: 0 3px 3px 0; background: linear-gradient(180deg, #1747ff, #18b4ff);
+}
+.nav button.ativo svg { opacity: 1; color: var(--ciano); }
+.nav-separador { color: #4f5a75; margin: 18px 12px 6px; letter-spacing: .02em; }
+.nav .rodape { color: #4f5a75; }
+.nav .nav-fechar-admin { color: #ff8f86; }
+.nav .nav-fechar-admin:hover { background: rgba(255,90,80,0.12); color: #ffb1aa; }
+
+/* controles */
+.botao { border-radius: var(--raio); border-color: var(--linha-forte); box-shadow: var(--sombra-1); transition: background .15s, border-color .15s, box-shadow .15s; }
+.botao:hover:not(:disabled) { border-color: #9fa9bd; }
+.botao.primario {
+  background: linear-gradient(180deg, #2a58ff 0%, var(--eletrico) 100%);
+  border-color: var(--eletrico);
+  box-shadow: 0 1px 2px rgba(23,71,255,0.35), inset 0 1px 0 rgba(255,255,255,0.18);
+}
+.botao.primario:hover:not(:disabled) { background: var(--acao-escura); border-color: var(--acao-escura); box-shadow: 0 4px 14px -4px rgba(23,71,255,0.6); }
+.botao.leve { box-shadow: none; }
+.botao.leve:hover:not(:disabled) { background: var(--acao-clara); color: var(--acao-escura); }
+.entrada, select.entrada, textarea.entrada { border-radius: var(--raio); transition: border-color .15s, box-shadow .15s; }
+.entrada:hover { border-color: #aeb7c9; }
+.entrada:focus { border-color: var(--eletrico); box-shadow: 0 0 0 3px var(--foco); }
+.tabela .celula:focus { border-color: var(--eletrico); box-shadow: 0 0 0 2px var(--foco); }
+.segmentos { border-radius: var(--raio); padding: 2px; gap: 2px; background: #e9edf5; border-color: transparent; }
+.segmentos button { border-radius: 6px; }
+.segmentos button + button { border-left: 0; }
+.segmentos button.ativo { background: var(--superficie); color: var(--acao); box-shadow: var(--sombra-1); font-weight: 600; }
+.etiqueta { border-radius: 999px; padding: 1px 8px; }
+.alerta { border-radius: 10px; }
+.menu-exibir summary { border-radius: var(--raio); }
+.menu-exibir-lista { border-radius: var(--raio-g); box-shadow: var(--sombra-2); border-color: var(--linha); }
+
+/* superfícies */
+.caixa { border-radius: var(--raio-g); border-color: var(--linha); box-shadow: var(--sombra-1); }
+.lista-conexoes button, .lista-modelos button { border-radius: var(--raio); }
+.lista-conexoes button.atual, .lista-modelos button.atual { background: var(--acao-clara); box-shadow: inset 0 0 0 1px var(--acao-borda); }
+.numero-modelo { background: var(--gradiente-gpv); }
+.fichas-modelo > div { border-radius: 10px; background: #f6f8fc; }
+
+/* tabela */
+.tabela th { background: #f5f7fb; color: var(--grafite); border-bottom-color: var(--linha); }
+.tabela tbody tr:hover td { background: #f5f8ff; }
+.tabela td.editado { box-shadow: inset 2px 0 0 var(--eletrico); }
+
+/* pedido */
+.pedido-chip { border-radius: 10px; transition: border-color .15s, box-shadow .15s; }
+.pedido-chip.atual { border-color: var(--eletrico); box-shadow: inset 0 0 0 1px var(--eletrico), 0 4px 14px -6px rgba(23,71,255,0.45); }
+.barra-ferramentas { background: #f7f9fc; }
+.rodape-pedido { border-top-color: var(--linha); box-shadow: 0 -6px 20px -14px rgba(15,23,48,0.35); }
+.rodape-pedido .indicador b { letter-spacing: -0.01em; }
+.puxador:hover span { background: var(--gradiente-gpv); }
+.vazio {
+  border-radius: 18px; border-color: var(--acao-borda);
+  background: radial-gradient(120% 90% at 50% 0%, #eef2ff 0%, #ffffff 60%);
+}
+.vazio.arrastando { border-color: var(--ciano); background: radial-gradient(120% 90% at 50% 0%, #dff4ff 0%, #ffffff 70%); }
+.balao-pedido { border-radius: 10px; box-shadow: var(--sombra-2); border-color: var(--linha); }
+
+/* janelas e avisos */
+.fundo-modal { background: rgba(7, 12, 26, 0.55); backdrop-filter: blur(3px); }
+.modal { border-radius: 16px; box-shadow: 0 30px 80px -20px rgba(7,12,26,0.55); }
+.modal .topo-banco { border-radius: 16px 16px 0 0; height: 5px; }
+.modal .botoes { background: #f7f9fc; border-radius: 0 0 16px 16px; border-top-color: var(--linha); }
+.aviso-flutuante { background: var(--noite-2); border-radius: 12px; box-shadow: 0 14px 34px -10px rgba(7,12,26,0.6); border: 1px solid rgba(255,255,255,0.06); }
+.barra-progresso { border-radius: 999px; background: #e9edf5; border: 0; }
+.barra-progresso span { background: var(--gradiente-gpv); border-radius: 999px; }
+.barra-mini span { background: linear-gradient(90deg, #ffffff, #bfe9ff); }
+
+/* login */
+.login .lado-form { border-left: 0; box-shadow: -24px 0 60px rgba(7,12,26,0.35); }
+.login .lado-form h1 { font-size: 26px; }
+.previa-login, .miniatura { border-radius: 10px; }
+.nav button { width: 100%; }
+.fichas-modelo dt { text-transform: none; letter-spacing: 0; font-size: 12px; }
+
+/* caixinhas dos pedidos: laranja/verde sempre visíveis, mesmo quando selecionadas */
+.pedido-chip.parcial { background: #ffe3c7 !important; border-color: #ec8f3a !important; box-shadow: inset 4px 0 0 #ec8f3a; }
+.pedido-chip.gerado { background: #d9f2e1 !important; border-color: #4fb377 !important; box-shadow: inset 4px 0 0 #4fb377; }
+.pedido-chip.parcial b { color: #9a4700; }
+.pedido-chip.gerado b { color: #17643a; }
+.pedido-chip.parcial.atual { box-shadow: inset 4px 0 0 #ec8f3a, 0 0 0 2px #ec8f3a, 0 6px 16px -6px rgba(236,143,58,0.7); }
+.pedido-chip.gerado.atual { box-shadow: inset 4px 0 0 #4fb377, 0 0 0 2px #4fb377, 0 6px 16px -6px rgba(79,179,119,0.7); }
