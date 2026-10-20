@@ -41,7 +41,7 @@ const conexoesNuvem: { id: string; empresa_id: string; dados: DadosConexaoNuvem 
 const locais: PerfilConexao[] = conexoesNuvem.map((c) => ({ ...c.dados, temSenha: false, atualizadoEm: new Date().toISOString() }))
 const senhasLocais = new Set(['hage-com', 'hage-ind'])
 
-const pdf = pedidosDemo as ResultadoPdf
+const pdf = { ...(pedidosDemo as ResultadoPdf), modelo: 'bluesoft' }
 const produtos = new Map<string, ProdutoErp>()
 let seq = 300
 for (const p of pdf.pedidos)

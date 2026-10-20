@@ -10,14 +10,15 @@ import { Pagina_Login } from './paginas/Login'
 import { Pagina_Empresas } from './paginas/Empresas'
 import { Pagina_Eventos } from './paginas/Eventos'
 import { Pagina_Aparencia } from './paginas/Aparencia'
+import { Pagina_Modelos } from './paginas/Modelos'
 import { AdminProvider, useAdmin } from './admin'
 
-export type Aba = 'pedido' | 'historico' | 'conexoes' | 'usuarios' | 'eventos' | 'aparencia' | 'empresas'
+export type Aba = 'pedido' | 'historico' | 'modelos' | 'conexoes' | 'usuarios' | 'eventos' | 'aparencia' | 'empresas'
 const ABAS_ADMIN: Aba[] = ['conexoes', 'usuarios', 'eventos', 'aparencia', 'empresas']
 
 function abaInicial(): Aba {
   const a = new URLSearchParams(location.search).get('aba') as Aba | null
-  return a && ['pedido', 'historico', ...ABAS_ADMIN].includes(a) ? a : 'pedido'
+  return a && ['pedido', 'historico', 'modelos', ...ABAS_ADMIN].includes(a) ? a : 'pedido'
 }
 
 function Casca() {
@@ -49,6 +50,7 @@ function Programa() {
   const itens: { id: Aba; rotulo: string; icone: string; mostrar: boolean }[] = [
     { id: 'pedido', rotulo: 'Pedido', icone: 'pedido', mostrar: true },
     { id: 'historico', rotulo: 'Histórico', icone: 'historico', mostrar: true },
+    { id: 'modelos', rotulo: 'Modelos de Pedido', icone: 'modelo', mostrar: true },
     // administrador da empresa: só Usuários; o resto é do super administrador
     { id: 'conexoes', rotulo: 'Conexões', icone: 'banco', mostrar: admin.ehSuper },
     { id: 'usuarios', rotulo: 'Usuários', icone: 'usuarios', mostrar: !!admin.perfil },
@@ -65,7 +67,7 @@ function Programa() {
         <nav className="nav" aria-label="Menu">
           {visiveis.map((i, n) => (
             <div key={i.id}>
-              {n === 2 && <div className="nav-separador">Administração</div>}
+              {n === 3 && <div className="nav-separador">Administração</div>}
               <button className={aba === i.id ? 'ativo' : ''} onClick={() => setAba(i.id)} aria-current={aba === i.id ? 'page' : undefined}>
                 <Icone nome={i.icone} /> {i.rotulo}
               </button>
@@ -81,6 +83,7 @@ function Programa() {
         {/* O pedido fica montado o tempo todo para não perder o que foi feito ao trocar de aba. */}
         <Pagina_Pedido visivel={aba === 'pedido'} />
         <Pagina_Historico visivel={aba === 'historico'} />
+        <Pagina_Modelos visivel={aba === 'modelos'} />
         {admin.ehSuper && aba === 'conexoes' && <Pagina_Conexoes />}
         {admin.perfil && <Pagina_Usuarios visivel={aba === 'usuarios'} />}
         {admin.ehSuper && <Pagina_Eventos visivel={aba === 'eventos'} />}

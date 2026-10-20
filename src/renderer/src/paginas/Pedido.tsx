@@ -6,6 +6,7 @@ import { useAviso, useConexoes, useSessao } from '../contexto'
 import { nuvem, type RegistroHistorico } from '../servicos'
 import { Icone } from '../componentes/Icone'
 import { Alerta, Modal } from '../componentes/Modal'
+import { nomeDoModelo } from '@shared/pdf/modelos'
 
 // ----------------------------------------------------------------- estado
 interface Geracao { ano: string; numero: string; filtro: FiltroST; conexao: string; nomeConexao?: string; qtd?: number }
@@ -466,6 +467,7 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
           <div className="arquivo-linha">
             {est.origem === 'pdf' ? <span className="nome-arquivo">{est.arquivo}</span> : <span className="nome-arquivo">Pedido digitado</span>}
             {arquivo && <span className="fraco mini">{arquivo.pedidos.length} pedido(s) no arquivo</span>}
+            {arquivo?.modelo && <span className="etiqueta neutra" title="Modelo de pedido reconhecido (veja a aba Modelos de Pedido)">{nomeDoModelo(arquivo.modelo)}</span>}
             <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
               <button className="botao fechar-pedido" onClick={fecharArquivo} title="Fechar este pedido para importar outro" aria-label="Fechar pedido">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg> Fechar
@@ -482,6 +484,8 @@ export function Pagina_Pedido({ visivel }: { visivel: boolean }) {
               const sit = e ? situacao(e) : null
               return (
                 <button key={p.numero} className={`pedido-chip ${p.numero === atual ? 'atual' : ''} ${sit?.estado === 'completo' ? 'gerado' : sit?.estado === 'parcial' ? 'parcial' : ''}`}
+                  // cor direto no botão: laranja = gerado em parte, verde = tudo gerado
+                  style={sit?.estado === 'completo' ? { background: '#dff3e5', borderColor: '#6cc08a' } : sit?.estado === 'parcial' ? { background: '#ffe8d1', borderColor: '#f0a050' } : undefined}
                   onClick={() => setAtual(p.numero)}
                   onMouseEnter={(ev) => { const r = ev.currentTarget.getBoundingClientRect(); setBalao({ chave: p.numero, x: r.left, y: r.bottom + 6 }) }}
                   onMouseLeave={() => setBalao(null)}>

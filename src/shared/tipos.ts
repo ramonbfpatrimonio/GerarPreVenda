@@ -115,6 +115,7 @@ export interface PedidoPdf {
 
 export interface ResultadoPdf {
   arquivo: string
+  modelo?: string // id do modelo de pedido reconhecido (ver shared/pdf/modelos.ts)
   pedidos: PedidoPdf[]
   avisos: string[]
 }

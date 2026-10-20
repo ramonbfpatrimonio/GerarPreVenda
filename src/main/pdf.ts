@@ -46,11 +46,13 @@ export async function lerPdf(caminho: string): Promise<ResultadoPdf> {
 
 /** Escolhe o leitor pelo layout do PDF. */
 export function lerPaginas(paginas: PaginaPdf[], arquivo: string): ResultadoPdf {
-  if (ehPedido210(paginas)) return lerPedidos210(paginas, arquivo)
-  const r = lerPedidosBluesoft(paginas, arquivo)
+  // Cada modelo de pedido (aba "Modelos de Pedido") tem o seu leitor.
+  if (ehPedido210(paginas)) return { ...lerPedidos210(paginas, arquivo), modelo: 'pedido210' }
+  const r: ResultadoPdf = { ...lerPedidosBluesoft(paginas, arquivo), modelo: 'bluesoft' }
   if (r.pedidos.length === 0) {
+    r.modelo = undefined
     r.avisos.push(
-      'Layout de PDF não reconhecido. Hoje o programa lê o pedido do Bluesoft (Supermercados DB) e o "210 - Emitir Pedido de Compra". Verifique se o PDF tem texto (não escaneado) ou envie o modelo para ser incluído.'
+      'Modelo de pedido não reconhecido. Veja na aba "Modelos de Pedido" os modelos que o programa lê. Verifique se o PDF tem texto (não escaneado) ou envie este modelo para ser incluído.'
     )
   }
   return r

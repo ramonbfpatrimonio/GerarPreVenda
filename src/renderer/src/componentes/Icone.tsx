@@ -4,6 +4,7 @@ const caminhos: Record<string, string> = {
   banco: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zm0 0v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3',
   historico: 'M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 3',
   usuarios: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21v-1a6 6 0 0 1 12 0v1M16 3.5a4 4 0 0 1 0 7.5M22 21v-1a6 6 0 0 0-4-5.6',
+  modelo: 'M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 15h7M9 18h4',
   pdf: 'M12 3v12m0 0-4-4m4 4 4-4M5 21h14',
   colar: 'M9 4h6v3H9zM8 5H6v16h12V5h-2M9 12h6M9 16h4',
   mais: 'M12 5v14M5 12h14',
