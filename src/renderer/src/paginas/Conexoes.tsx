@@ -61,6 +61,16 @@ export function Pagina_Conexoes() {
     try {
       const r = await window.api.conexoes.testar(form, senha || undefined)
       setTeste(r)
+      // conectou com a senha digitada numa conexão já salva: guarda a senha neste computador
+      const conectou = r.itens?.[0]?.ok !== false && (r.ok || (r.bancos?.length ?? 0) > 0)
+      if (conectou && senha && form.id) {
+        await window.api.conexoes.salvarSenha(form.id, senha)
+        setSenha('')
+        await recarregar()
+        setForm((f) => ({ ...f, temSenha: true }))
+        void adm.registrar({ acao: 'salvou', entidade: 'conexão', descricao: `Senha do SQL de ${form.cliente} › ${form.nome} guardada neste computador` })
+        avisar('Conectou. A senha ficou guardada neste computador.', 'ok')
+      }
       if (r.bancos?.length && !form.banco) avisar('Conectado. Escolha o banco na lista e teste de novo para conferir as tabelas.', 'ok')
     } catch (e) {
       setTeste({ ok: false, itens: [{ ok: false, titulo: 'Erro', detalhe: (e as Error).message }] })
@@ -263,7 +273,9 @@ export function Pagina_Conexoes() {
             </label>
             {form.autenticacao === 'sql' && <>
               <label className="campo c4"><span>Usuário</span><input className="entrada" value={form.usuario} onChange={(e) => muda('usuario', e.target.value)} /></label>
-              {admin && <label className="campo c4"><span>Senha deste computador</span><input className="entrada" type="password" value={senha} onChange={(e) => setSenha(e.target.value)} placeholder={form.temSenha ? 'Salva (digite para trocar)' : ''} autoComplete="new-password" /></label>}
+              {admin && <label className="campo c4"><span>Senha deste computador</span><input className="entrada" type="password" value={senha} onChange={(e) => setSenha(e.target.value)} placeholder={form.temSenha ? 'Salva (digite para trocar)' : ''} autoComplete="new-password" />
+                <small style={{ color: form.temSenha ? 'var(--ok)' : 'var(--erro)' }}>{form.temSenha ? '✓ Guardada neste computador' : form.id ? 'Não guardada: digite e teste ou salve' : 'É guardada ao salvar a conexão'}</small>
+              </label>}
             </>}
 
             <label className="campo c6"><span>Banco de dados</span>

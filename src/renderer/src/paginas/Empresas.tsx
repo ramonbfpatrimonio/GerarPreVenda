@@ -6,7 +6,10 @@ import { useAviso, useSessao } from '../contexto'
 import { Icone } from '../componentes/Icone'
 import { Alerta, Modal } from '../componentes/Modal'
 
-const vazio = { nome: '', cnpj: '', admin_nome: '', admin_email: '', admin_senha: '' }
+const vazio = { nome: '', cnpj: '', admin_nome: '', admin_email: '', admin_senha: '', retencao_meses: 1 }
+// Por quanto tempo o histórico fica guardado na nuvem (padrão: 1 mês)
+const PRAZOS = [1, 2, 3, 6, 12, 24, 36, 60, 120]
+const nomePrazo = (m: number) => (m === 1 ? '1 mês' : `${m} meses`)
 
 export function Pagina_Empresas({ visivel, irParaPedido }: { visivel: boolean; irParaPedido: () => void }) {
   const { recarregarEmpresas: recarregarSessao, escolherEmpresa, empresaAtual, internet: net, ehSuper: sessaoSuper } = useSessao()
@@ -37,7 +40,9 @@ export function Pagina_Empresas({ visivel, irParaPedido }: { visivel: boolean; i
     if (!nuvem) return
     setSalvando(true)
     try {
-      const id = await nuvem.criarEmpresa(dados)
+      const { retencao_meses, ...resto } = dados
+      const id = await nuvem.criarEmpresa(resto)
+      await nuvem.alterarEmpresa(id, { retencao_meses })
       void adm.registrar({ acao: 'criou', entidade: 'empresa', descricao: `Criou a empresa ${dados.nome} com o administrador ${dados.admin_email}` })
       avisar(`Empresa ${dados.nome} criada. O administrador já pode entrar com ${dados.admin_email}.`, 'ok')
       setNova(false)
@@ -103,7 +108,7 @@ export function Pagina_Empresas({ visivel, irParaPedido }: { visivel: boolean; i
                 <td className="num">{e.prevendas_mes}</td>
                 <td className="num">{moeda(e.total_mes ?? 0)}</td>
                 <td>{e.ultima_atividade ? new Date(e.ultima_atividade).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : <span className="fraco">nunca</span>}</td>
-                <td>{e.retencao_meses} meses</td>
+                <td>{nomePrazo(e.retencao_meses)}</td>
                 <td>{e.ativa ? <span className="etiqueta ok">Ativa</span> : <span className="etiqueta erro">Bloqueada</span>}</td>
                 <td style={{ textAlign: 'right' }}>
                   {sessaoSuper && <button className="botao leve" onClick={() => { escolherEmpresa(e.id); irParaPedido() }}>Trabalhar nesta</button>}
@@ -134,6 +139,12 @@ export function Pagina_Empresas({ visivel, irParaPedido }: { visivel: boolean; i
         <div className="grade-form">
           <label className="campo c8"><span>Nome</span><input className="entrada" value={dados.nome} onChange={(e) => setDados({ ...dados, nome: e.target.value })} autoFocus /></label>
           <label className="campo c4"><span>CNPJ</span><input className="entrada" value={dados.cnpj} onChange={(e) => setDados({ ...dados, cnpj: e.target.value })} placeholder="opcional" /></label>
+          <label className="campo c6"><span>Guardar o histórico por</span>
+            <select className="entrada" value={dados.retencao_meses} onChange={(e) => setDados({ ...dados, retencao_meses: Number(e.target.value) })}>
+              {PRAZOS.map((m) => <option key={m} value={m}>{nomePrazo(m)}</option>)}
+            </select>
+            <small>Depois disso o registro sai da nuvem (a pré-venda continua no ERP).</small>
+          </label>
         </div>
         <h3 style={{ marginTop: 6 }}>Administrador da empresa</h3>
         <p className="fraco mini">Ele entra no programa, cadastra as conexões e cria os operadores da empresa.</p>
@@ -154,7 +165,7 @@ export function Pagina_Empresas({ visivel, irParaPedido }: { visivel: boolean; i
               <label className="campo c4"><span>CNPJ</span><input className="entrada" value={editando.cnpj} onChange={(e) => setEditando({ ...editando, cnpj: e.target.value })} /></label>
               <label className="campo c6"><span>Guardar o histórico por</span>
                 <select className="entrada" value={editando.retencao_meses} onChange={(e) => setEditando({ ...editando, retencao_meses: Number(e.target.value) })}>
-                  {[6, 12, 24, 36, 60, 120].map((m) => <option key={m} value={m}>{m} meses</option>)}
+                  {PRAZOS.map((m) => <option key={m} value={m}>{nomePrazo(m)}</option>)}
                 </select>
                 <small>Depois disso o registro sai da nuvem (a pré-venda continua no ERP).</small>
               </label>
