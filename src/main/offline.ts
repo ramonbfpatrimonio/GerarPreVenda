@@ -26,6 +26,7 @@ export interface PerfilOffline {
   empresa_id: string | null
   empresa_nome: string
   empresa_ativa: boolean
+  licenca?: unknown // situação da cobrança no último acesso online
 }
 
 interface Credencial {

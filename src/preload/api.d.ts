@@ -20,6 +20,7 @@ export interface PerfilOffline {
   empresa_id: string | null
   empresa_nome: string
   empresa_ativa: boolean
+  licenca?: unknown
 }
 
 export type RegistroFila = Record<string, unknown> & { chave_local: string; _tipo?: 'prevenda' | 'evento' }

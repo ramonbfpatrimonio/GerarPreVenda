@@ -3,6 +3,7 @@
 // os filtros daqui são só para a tela.
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { DadosConexaoNuvem } from '@shared/tipos'
+import type { Licenca } from '@shared/licenca'
 
 export type Papel = 'super_admin' | 'admin' | 'operador'
 
@@ -15,6 +16,37 @@ export interface Perfil {
   empresa_id: string | null
   empresa_nome: string
   empresa_ativa: boolean
+  licenca?: Licenca | null // situação da cobrança da empresa (guardada também para o acesso offline)
+}
+
+export interface ConfigCobranca {
+  dias_aviso: number
+  dias_tolerancia: number
+  contato: string
+}
+
+export interface EmpresaCobranca {
+  id: string
+  nome: string
+  cnpj: string
+  ativa: boolean
+  licenca_valor: number
+  licenca_ciclo_meses: number
+  licenca_vencimento: string | null
+  licenca_obs: string
+  ultimo_pagamento: string | null
+}
+
+export interface PagamentoLicenca {
+  id: number
+  empresa_id: string
+  pago_em: string
+  valor: number
+  forma: string
+  obs: string
+  vencimento_anterior: string | null
+  vencimento_novo: string
+  criado_em: string
 }
 
 export interface Empresa {
@@ -82,6 +114,15 @@ export interface Nuvem {
   empresas(): Promise<Empresa[]>
   criarEmpresa(d: { nome: string; cnpj: string; admin_nome: string; admin_email: string; admin_senha: string }): Promise<string>
   alterarEmpresa(id: string, d: Partial<Pick<Empresa, 'nome' | 'cnpj' | 'ativa' | 'retencao_meses'>>): Promise<void>
+  // cobrança da licença
+  licenca(empresaId?: string | null): Promise<Licenca | null>
+  configCobranca(): Promise<ConfigCobranca>
+  salvarConfigCobranca(d: ConfigCobranca): Promise<void>
+  empresasCobranca(): Promise<EmpresaCobranca[]>
+  alterarLicenca(id: string, d: Partial<Pick<EmpresaCobranca, 'licenca_valor' | 'licenca_ciclo_meses' | 'licenca_vencimento' | 'licenca_obs'>>): Promise<void>
+  pagamentos(empresaId: string): Promise<PagamentoLicenca[]>
+  registrarPagamento(d: { empresaId: string; pagoEm: string; valor: number; forma: string; obs: string }): Promise<string>
+  estornarPagamento(id: number): Promise<string | null>
   // conexões da empresa
   conexoes(empresaId: string): Promise<ConexaoNuvem[]>
   salvarConexao(empresaId: string, dados: DadosConexaoNuvem): Promise<void>
@@ -168,9 +209,11 @@ function traduzir(msg: string): string {
   if (/row-level security|permission denied/i.test(msg)) return 'Sem permissão para esta operação.'
   const falta = msg.match(/Could not find the (?:table|function) '?public\.(\w+)/i)
   if (falta) {
-    const arquivo = /evento/i.test(falta[1]) ? '003_eventos.sql' : /empresa|conexoes_empresa|resumo/i.test(falta[1]) ? '002_empresas.sql' : '001_inicial.sql'
+    const arquivo = /licenca|cobranca|pagamento/i.test(falta[1]) ? '004_cobranca.sql' : /evento/i.test(falta[1]) ? '003_eventos.sql' : /empresa|conexoes_empresa|resumo/i.test(falta[1]) ? '002_empresas.sql' : '001_inicial.sql'
     return `O banco na nuvem ainda não foi atualizado (falta "${falta[1]}"). No Supabase, abra o SQL Editor e rode supabase/migrations/${arquivo}.`
   }
+  if (/column [\w.]*licenca_\w+ does not exist/i.test(msg))
+    return 'O banco na nuvem ainda não foi atualizado para a cobrança. No Supabase, abra o SQL Editor e rode supabase/migrations/004_cobranca.sql.'
   return msg
 }
 
@@ -247,7 +290,16 @@ function fabricar(obter: () => SupabaseClient): Nuvem {
     const id = await this.usuarioAtualId()
     if (!id) return null
     const p = (await ou(sb().from('perfis').select(COLUNAS_PERFIL).eq('id', id).maybeSingle())) as LinhaPerfil | null
-    return p ? paraPerfil(p) : null
+    if (!p) return null
+    const perfil = paraPerfil(p)
+    if (perfil.papel !== 'super_admin' && perfil.empresa_id) {
+      // Sem a migração 004 ainda: entra normalmente, sem cobrança
+      perfil.licenca = await this.licenca().catch((e) => {
+        if (ehErroDeRede(e)) throw e
+        return null
+      })
+    }
+    return perfil
   },
   async online() {
     try {
@@ -306,6 +358,37 @@ function fabricar(obter: () => SupabaseClient): Nuvem {
   },
   async alterarEmpresa(id, d) {
     await ou(sb().from('empresas').update(d).eq('id', id))
+  },
+
+  async licenca(empresaId) {
+    const r = (await ou(sb().rpc('minha_licenca', { p_empresa: empresaId ?? null }))) as Licenca[] | null
+    const l = r?.[0]
+    return l ? { ...l, valor: Number(l.valor) } : null
+  },
+  async configCobranca() {
+    const c = (await ou(sb().from('config_cobranca').select('dias_aviso, dias_tolerancia, contato').eq('id', 1).maybeSingle())) as ConfigCobranca | null
+    return c ?? { dias_aviso: 5, dias_tolerancia: 3, contato: '' }
+  },
+  async salvarConfigCobranca(d) {
+    await ou(sb().from('config_cobranca').update({ ...d, atualizado_em: new Date().toISOString() }).eq('id', 1))
+  },
+  async empresasCobranca() {
+    const es = ((await ou(sb().from('empresas').select('id, nome, cnpj, ativa, licenca_valor, licenca_ciclo_meses, licenca_vencimento, licenca_obs').order('nome'))) ?? []) as EmpresaCobranca[]
+    const pg = ((await ou(sb().from('pagamentos_licenca').select('empresa_id, pago_em').order('pago_em', { ascending: false }))) ?? []) as { empresa_id: string; pago_em: string }[]
+    return es.map((e) => ({ ...e, licenca_valor: Number(e.licenca_valor), ultimo_pagamento: pg.find((x) => x.empresa_id === e.id)?.pago_em ?? null }))
+  },
+  async alterarLicenca(id, d) {
+    await ou(sb().from('empresas').update(d).eq('id', id))
+  },
+  async pagamentos(empresaId) {
+    const r = ((await ou(sb().from('pagamentos_licenca').select('*').eq('empresa_id', empresaId).order('id', { ascending: false }))) ?? []) as PagamentoLicenca[]
+    return r.map((x) => ({ ...x, valor: Number(x.valor) }))
+  },
+  async registrarPagamento(d) {
+    return (await ou(sb().rpc('registrar_pagamento', { p_empresa: d.empresaId, p_pago_em: d.pagoEm, p_valor: d.valor, p_forma: d.forma, p_obs: d.obs }))) as string
+  },
+  async estornarPagamento(id) {
+    return (await ou(sb().rpc('estornar_pagamento', { p_id: id }))) as string | null
   },
 
   async conexoes(empresaId) {

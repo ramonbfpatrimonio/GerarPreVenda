@@ -640,3 +640,42 @@ h2 { letter-spacing: -0.015em; }
 @keyframes halo { 0%, 100% { opacity: .35; transform: scale(.92); } 50% { opacity: 1; transform: scale(1.08); } }
 @keyframes encher { to { width: 100%; } }
 @media (prefers-reduced-motion: reduce) { .preloader .trilho span { animation-duration: 4s !important; } }
+
+/* ------------------------------------------------------------------ cobrança */
+.casca { display: flex; flex-direction: column; }
+.casca > .faixa, .casca > .aviso-licenca { flex: none; }
+.casca > .corpo { flex: 1; min-height: 0; }
+.aviso-licenca { display: flex; align-items: center; gap: 10px; padding: 8px 18px; font-size: 13.5px; background: var(--aviso-fundo); color: var(--aviso); border-bottom: 1px solid #f1dc9c; }
+.aviso-licenca.atrasada { background: var(--erro-fundo); color: var(--erro); border-bottom-color: #f3c4bf; }
+.aviso-licenca svg { width: 18px; height: 18px; flex: none; }
+.aviso-licenca span { flex: 1; }
+.aviso-licenca button { border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 999px; padding: 3px 12px; cursor: pointer; font-size: 12.5px; font-weight: 600; }
+.aviso-licenca button:hover { background: rgba(255,255,255,0.6); }
+.icone-layout.icone-vencendo { background: linear-gradient(135deg, #f3b234, #e28a12); box-shadow: 0 10px 26px -10px rgba(226,138,18,0.7); }
+.icone-layout.icone-atraso { background: linear-gradient(135deg, #f06a5a, #c4321f); box-shadow: 0 10px 26px -10px rgba(196,50,31,0.7); }
+
+.indicadores-cobranca { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 1.3fr); gap: 10px; margin-bottom: 14px; }
+.indicador-cobranca { text-align: left; display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: var(--raio-g); border: 1px solid var(--linha); background: var(--superficie); box-shadow: var(--sombra-1); cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+button.indicador-cobranca:hover { border-color: var(--acao-borda); }
+.indicador-cobranca small { font-size: 12px; color: var(--grafite); font-weight: 500; }
+.indicador-cobranca b { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.indicador-cobranca span { font-size: 12px; color: var(--apagado); min-height: 16px; }
+.indicador-cobranca.erro b, .indicador-cobranca.erro span { color: var(--erro); }
+.indicador-cobranca.aviso b { color: #b07400; }
+.indicador-cobranca.ativo { border-color: var(--eletrico); box-shadow: inset 0 0 0 1px var(--eletrico), 0 4px 14px -6px rgba(23,71,255,0.45); }
+.indicador-cobranca.receita { cursor: default; background: linear-gradient(135deg, var(--noite-2), var(--noite)); border-color: transparent; color: #fff; }
+.indicador-cobranca.receita small { color: var(--prata); }
+.indicador-cobranca.receita span { color: var(--prata-apagada); }
+.tabela-cobranca td { height: 52px; }
+.tabela-cobranca tr.cob-bloqueada td:first-child { box-shadow: inset 3px 0 0 var(--erro); }
+.tabela-cobranca tr.cob-atrasada td:first-child { box-shadow: inset 3px 0 0 #ec8f3a; }
+.tabela-cobranca tr.cob-vencendo td:first-child { box-shadow: inset 3px 0 0 #e0a800; }
+.tabela-cobranca .botao + .botao { margin-left: 6px; }
+.avanco-vencimento { display: flex; align-items: center; gap: 16px; padding: 12px 16px; border-radius: var(--raio-g); background: var(--acao-clara); border: 1px solid var(--acao-borda); }
+.avanco-vencimento > div { display: flex; flex-direction: column; }
+.avanco-vencimento small { font-size: 12px; color: var(--grafite); }
+.avanco-vencimento b { font-size: 18px; font-variant-numeric: tabular-nums; }
+.avanco-vencimento > span { font-size: 20px; color: var(--acao); }
+.exemplo-aviso { padding: 10px 12px; border-radius: 10px; background: var(--papel); border: 1px solid var(--linha); font-size: 13px; }
+.exemplo-aviso small { color: var(--grafite); font-size: 12px; }
+@media (max-width: 1250px) { .indicadores-cobranca { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

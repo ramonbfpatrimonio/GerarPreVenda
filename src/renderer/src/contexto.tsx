@@ -2,6 +2,27 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { PerfilConexao } from '@shared/tipos'
 import { ehErroDeRede, nuvem, type Empresa, type NovoEvento, type Nuvem, type Perfil, type RegistroHistorico } from './servicos'
 import type { AparenciaLocal } from '../../preload/api'
+import { dataBR, hojeLocal, maisRecente, situacaoLicenca, type Licenca, type SituacaoLicenca } from '@shared/licenca'
+
+// ----------------------------------------------------------------- licença (cobrança)
+export type EstadoDaLicenca = Licenca & SituacaoLicenca
+
+/** Situação da licença da empresa do usuário (super administrador não tem). */
+export function licencaDoPerfil(p: Perfil | null): EstadoDaLicenca | null {
+  if (!p || p.papel === 'super_admin' || !p.licenca) return null
+  const l = p.licenca
+  // usa a data mais recente entre o computador e a última data vinda do servidor
+  const hoje = maisRecente(hojeLocal(), l.hoje)
+  return { ...l, ...situacaoLicenca(l.vencimento, l.dias_aviso, l.dias_tolerancia, hoje) }
+}
+
+export const contatoSuporte = (l: Licenca | null) => (l?.contato?.trim() ? `Fale com o suporte: ${l.contato.trim()}.` : 'Fale com o suporte.')
+
+function motivoBloqueioLicenca(p: Perfil | null): string {
+  const l = licencaDoPerfil(p)
+  if (l?.estado !== 'bloqueada') return ''
+  return `Licença vencida em ${dataBR(l.vencimento)}. O acesso foi bloqueado por falta de pagamento. ${contatoSuporte(l)}`
+}
 
 // ----------------------------------------------------------------- avisos
 type TipoAviso = 'info' | 'ok' | 'erro'
@@ -48,6 +69,8 @@ interface Sessao {
   registrarNoHistorico(r: RegistroHistorico): Promise<'enviado' | 'na-fila'>
   /** Registra um evento do sistema (vai para a fila se estiver sem internet). */
   registrarEvento(e: NovoEvento, via?: Nuvem | null): Promise<void>
+  /** cobrança da licença da empresa (null = super administrador ou sem cobrança configurada) */
+  licenca: EstadoDaLicenca | null
   aparencia: AparenciaLocal | null
   recarregarAparencia(): Promise<void>
   entrar(email: string, senha: string): Promise<void>
@@ -94,6 +117,7 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
     if (!p.ativo) motivo = 'Seu usuário está desativado. Fale com o administrador.'
     else if (p.papel !== 'super_admin' && !p.empresa_id) motivo = 'Seu usuário não está ligado a nenhuma empresa. Fale com o administrador.'
     else if (p.papel !== 'super_admin' && !p.empresa_ativa) motivo = 'Acesso da empresa suspenso. Fale com o suporte.'
+    else motivo = motivoBloqueioLicenca(p)
     if (motivo) {
       await window.api.offline.esquecer(p.email).catch(() => undefined)
       await nuvem.sair()
@@ -292,9 +316,34 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
     setAparencia(await window.api.aparencia.ler().catch(() => null))
   }, [])
 
+  // ---- licença: reconsulta de tempos em tempos (o programa pode ficar aberto por dias)
+  const [relogio, setRelogio] = useState(0)
+  useEffect(() => {
+    if (!perfil || perfil.papel === 'super_admin') return
+    const t = setInterval(() => {
+      setRelogio((n) => n + 1)
+      if (internet && !offline)
+        void nuvem.licenca().then((l) => {
+          setPerfil((p) => (p ? { ...p, licenca: l } : p))
+          void window.api.offline.atualizarPerfil({ ...perfil, licenca: l }).catch(() => undefined)
+        }).catch(() => undefined)
+    }, 30 * 60 * 1000)
+    return () => clearInterval(t)
+  }, [perfil?.id, internet, offline]) // eslint-disable-line react-hooks/exhaustive-deps
+  const licenca = useMemo(() => licencaDoPerfil(perfil), [perfil, relogio])
+  // venceu a tolerância com o programa aberto: sai e explica o motivo
+  useEffect(() => {
+    if (licenca?.estado !== 'bloqueada') return
+    setErro(motivoBloqueioLicenca(perfil))
+    void nuvem.sair()
+    setPerfil(null)
+    setOffline(false)
+  }, [licenca?.estado]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const valor = useMemo<Sessao>(
     () => ({
       perfil,
+      licenca,
       offline,
       internet: internet && !offline,
       carregando,
@@ -318,6 +367,8 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
           if (!ehErroDeRede(e)) throw e
           // Sem internet: tenta o acesso guardado neste computador
           const p = (await window.api.offline.entrar(email, senha)) as Perfil
+          const bloqueio = motivoBloqueioLicenca(p)
+          if (bloqueio) throw new Error(bloqueio)
           setPerfil(p)
           setOffline(true)
           setInternet(false)
@@ -341,7 +392,7 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
         setOffline(false)
       }
     }),
-    [perfil, offline, internet, carregando, erro, empresaAtual, empresas, escolherEmpresa, recarregarEmpresas, pendentes, registrarNoHistorico, registrarEvento, aparencia, recarregarAparencia, ehSuper, validar]
+    [perfil, licenca, offline, internet, carregando, erro, empresaAtual, empresas, escolherEmpresa, recarregarEmpresas, pendentes, registrarNoHistorico, registrarEvento, aparencia, recarregarAparencia, ehSuper, validar]
   )
   return <SessaoCtx.Provider value={valor}>{children}</SessaoCtx.Provider>
 }

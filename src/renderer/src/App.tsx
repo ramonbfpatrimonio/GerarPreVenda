@@ -11,10 +11,12 @@ import { Pagina_Empresas } from './paginas/Empresas'
 import { Pagina_Eventos } from './paginas/Eventos'
 import { Pagina_Aparencia } from './paginas/Aparencia'
 import { Pagina_Modelos } from './paginas/Modelos'
+import { Pagina_Cobranca } from './paginas/Cobranca'
+import { AvisoLicenca } from './componentes/AvisoLicenca'
 import { AdminProvider, useAdmin } from './admin'
 
-export type Aba = 'pedido' | 'historico' | 'modelos' | 'conexoes' | 'usuarios' | 'eventos' | 'aparencia' | 'empresas'
-const ABAS_ADMIN: Aba[] = ['conexoes', 'usuarios', 'eventos', 'aparencia', 'empresas', 'modelos']
+export type Aba = 'pedido' | 'historico' | 'modelos' | 'conexoes' | 'usuarios' | 'eventos' | 'aparencia' | 'empresas' | 'cobranca'
+const ABAS_ADMIN: Aba[] = ['conexoes', 'usuarios', 'eventos', 'aparencia', 'empresas', 'modelos', 'cobranca']
 
 function abaInicial(): Aba {
   const a = new URLSearchParams(location.search).get('aba') as Aba | null
@@ -44,7 +46,7 @@ function Programa() {
 
   // Área administrativa fechou: volta para o pedido se estava numa aba oculta
   useEffect(() => {
-    if ((!admin.perfil && ABAS_ADMIN.includes(aba)) || (!admin.ehSuper && ['conexoes', 'eventos', 'aparencia', 'empresas', 'modelos'].includes(aba))) setAba('pedido')
+    if ((!admin.perfil && ABAS_ADMIN.includes(aba)) || (!admin.ehSuper && ['conexoes', 'eventos', 'aparencia', 'empresas', 'modelos', 'cobranca'].includes(aba))) setAba('pedido')
   }, [admin.perfil, admin.ehSuper]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const itens: { id: Aba; rotulo: string; icone: string; mostrar: boolean }[] = [
@@ -56,6 +58,7 @@ function Programa() {
     { id: 'eventos', rotulo: 'Eventos do sistema', icone: 'eventos', mostrar: admin.ehSuper },
     { id: 'aparencia', rotulo: 'Aparência', icone: 'imagem', mostrar: admin.ehSuper },
     { id: 'empresas', rotulo: 'Empresas', icone: 'empresa', mostrar: admin.ehSuper },
+    { id: 'cobranca', rotulo: 'Cobrança', icone: 'dinheiro', mostrar: admin.ehSuper },
     { id: 'modelos', rotulo: 'Modelos de Pedido', icone: 'modelo', mostrar: admin.ehSuper }
   ]
   const visiveis = itens.filter((i) => i.mostrar)
@@ -63,6 +66,7 @@ function Programa() {
   return (
     <div className="casca">
       <Faixa irPara={(a) => setAba(a)} />
+      <AvisoLicenca />
       <div className="corpo">
         <nav className="nav" aria-label="Menu">
           {visiveis.map((i, n) => (
@@ -88,6 +92,7 @@ function Programa() {
         {admin.ehSuper && <Pagina_Eventos visivel={aba === 'eventos'} />}
         {admin.ehSuper && <Pagina_Aparencia visivel={aba === 'aparencia'} />}
         {admin.ehSuper && <Pagina_Modelos visivel={aba === 'modelos'} />}
+        {admin.ehSuper && <Pagina_Cobranca visivel={aba === 'cobranca'} />}
         {admin.ehSuper && <Pagina_Empresas visivel={aba === 'empresas'} irParaPedido={() => setAba('pedido')} />}
       </div>
     </div>

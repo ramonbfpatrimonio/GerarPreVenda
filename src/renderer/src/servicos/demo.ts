@@ -5,7 +5,8 @@
 import type { Api, RegistroFila } from '../../../preload/api'
 import type { DadosConexaoNuvem, PerfilConexao, ProdutoErp, ResultadoPdf } from '@shared/tipos'
 import { REGRAS_PADRAO } from '@shared/tipos'
-import type { Empresa, Evento, NovoEvento, Nuvem, Perfil, RegistroHistorico } from './nuvem'
+import type { ConfigCobranca, Empresa, EmpresaCobranca, Evento, NovoEvento, Nuvem, PagamentoLicenca, Perfil, RegistroHistorico } from './nuvem'
+import { hojeLocal, somarDias } from '@shared/licenca'
 import type { AparenciaLocal, EstadoAtualizacao } from '../../../preload/api'
 import pedidosDemo from './demo-pedidos.json'
 
@@ -22,6 +23,33 @@ const empresas: Empresa[] = [
 ]
 
 if (params.has('vazio')) empresas.length = 0 // ?vazio: banco da nuvem zerado
+
+// Cobrança. ?licenca=vencendo | atrasada | bloqueada muda a situação da Hage (para ver os avisos).
+const HOJE = hojeLocal()
+const deslocHage = ({ vencendo: 3, atrasada: -2, bloqueada: -5 } as Record<string, number>)[params.get('licenca') ?? ''] ?? 12
+const configCob: ConfigCobranca = { dias_aviso: 5, dias_tolerancia: 3, contato: 'WhatsApp (92) 99999-0000' }
+const licencas: Record<string, Omit<EmpresaCobranca, 'id' | 'nome' | 'cnpj' | 'ativa' | 'ultimo_pagamento'>> = {
+  [HAGE]: { licenca_valor: 189.9, licenca_ciclo_meses: 1, licenca_vencimento: somarDias(HOJE, deslocHage), licenca_obs: '' },
+  [NORTE]: { licenca_valor: 149.9, licenca_ciclo_meses: 1, licenca_vencimento: somarDias(HOJE, -2), licenca_obs: 'Paga por PIX' }
+}
+if (empresas.length) {
+  empresas.push(
+    { id: 'emp-sol', nome: 'Mercado Sol', cnpj: '22333444000172', ativa: true, retencao_meses: 24, usuarios: 3, prevendas_mes: 0, total_mes: 0, ultima_atividade: null },
+    { id: 'emp-rio', nome: 'Atacado Rio Negro', cnpj: '33444555000163', ativa: true, retencao_meses: 12, usuarios: 2, prevendas_mes: 9, total_mes: 20311.4, ultima_atividade: null },
+    { id: 'emp-teste', nome: 'Cliente em teste', cnpj: '', ativa: true, retencao_meses: 1, usuarios: 1, prevendas_mes: 2, total_mes: 800, ultima_atividade: null }
+  )
+  licencas['emp-sol'] = { licenca_valor: 189.9, licenca_ciclo_meses: 1, licenca_vencimento: somarDias(HOJE, -6), licenca_obs: '' }
+  licencas['emp-rio'] = { licenca_valor: 1990, licenca_ciclo_meses: 12, licenca_vencimento: somarDias(HOJE, 4), licenca_obs: 'Plano anual' }
+  licencas['emp-teste'] = { licenca_valor: 0, licenca_ciclo_meses: 1, licenca_vencimento: null, licenca_obs: 'Período de teste' }
+}
+const pagamentosDemo: PagamentoLicenca[] = [
+  { id: 1, empresa_id: HAGE, pago_em: somarDias(HOJE, deslocHage - 31), valor: 189.9, forma: 'PIX', obs: '', vencimento_anterior: somarDias(HOJE, deslocHage - 31), vencimento_novo: somarDias(HOJE, deslocHage), criado_em: new Date().toISOString() }
+]
+const somarMesesDemo = (d: string, m: number) => { const x = new Date(d + 'T12:00:00'); x.setMonth(x.getMonth() + m); return x.toISOString().slice(0, 10) }
+const licencaDe = (id: string) => {
+  const l = licencas[id]
+  return l ? { vencimento: l.licenca_vencimento, valor: l.licenca_valor, ciclo_meses: l.licenca_ciclo_meses, ...configCob, hoje: HOJE } : null
+}
 
 const base = (o: Partial<PerfilConexao>): PerfilConexao => ({
   id: '', empresaId: HAGE, cliente: 'Hage', nome: '', cor: '#1f5f9e', servidor: 'THIAGO-DELL', instancia: '', porta: null,
@@ -166,6 +194,8 @@ export function instalarApiDemo() {
     pdf: {
       abrir: async () => {
         await espera(400)
+        // ?semlayout simula um PDF de layout que o sistema não tem
+        if (location.search.includes('semlayout')) return { arquivo: 'PEDIDO_OUTRA_REDE.pdf', pedidos: [], avisos: ['Modelo de pedido não reconhecido.'] }
         return structuredClone(pdf)
       },
       lerArquivo: async () => structuredClone(pdf)
@@ -290,7 +320,9 @@ function fabricarDemo(quem: () => Perfil | null): Nuvem {
   },
   async meuPerfil() {
     redeOk()
-    return logado ? perfilAtual() : null
+    if (!logado) return null
+    const p = perfilAtual()
+    return p.papel === 'super_admin' || !p.empresa_id ? p : { ...p, licenca: licencaDe(p.empresa_id) }
   },
   async online() {
     return !semInternet
@@ -344,6 +376,48 @@ function fabricarDemo(quem: () => Perfil | null): Nuvem {
   async alterarEmpresa(id, d) {
     const e = empresas.find((x) => x.id === id)
     if (e) Object.assign(e, d)
+  },
+  async licenca(empresaId) {
+    const p = perfilAtual()
+    return licencaDe(empresaId ?? p.empresa_id ?? '')
+  },
+  async configCobranca() {
+    return { ...configCob }
+  },
+  async salvarConfigCobranca(d) {
+    await espera(200)
+    Object.assign(configCob, d)
+  },
+  async empresasCobranca() {
+    redeOk()
+    await espera(250)
+    return empresas.map((e) => ({
+      id: e.id, nome: e.nome, cnpj: e.cnpj, ativa: e.ativa,
+      ...(licencas[e.id] ?? { licenca_valor: 0, licenca_ciclo_meses: 1, licenca_vencimento: null, licenca_obs: '' }),
+      ultimo_pagamento: pagamentosDemo.filter((x) => x.empresa_id === e.id).sort((a, b) => b.id - a.id)[0]?.pago_em ?? null
+    }))
+  },
+  async alterarLicenca(id, d) {
+    await espera(200)
+    licencas[id] = { ...(licencas[id] ?? { licenca_valor: 0, licenca_ciclo_meses: 1, licenca_vencimento: null, licenca_obs: '' }), ...d }
+  },
+  async pagamentos(empresaId) {
+    return pagamentosDemo.filter((x) => x.empresa_id === empresaId).sort((a, b) => b.id - a.id).map((x) => ({ ...x }))
+  },
+  async registrarPagamento(d) {
+    await espera(300)
+    const l = (licencas[d.empresaId] ??= { licenca_valor: 0, licenca_ciclo_meses: 1, licenca_vencimento: null, licenca_obs: '' })
+    const novo = somarMesesDemo(l.licenca_vencimento ?? d.pagoEm, l.licenca_ciclo_meses)
+    pagamentosDemo.push({ id: Math.max(0, ...pagamentosDemo.map((x) => x.id)) + 1, empresa_id: d.empresaId, pago_em: d.pagoEm, valor: d.valor, forma: d.forma, obs: d.obs, vencimento_anterior: l.licenca_vencimento, vencimento_novo: novo, criado_em: new Date().toISOString() })
+    l.licenca_vencimento = novo
+    return novo
+  },
+  async estornarPagamento(id) {
+    const i = pagamentosDemo.findIndex((x) => x.id === id)
+    if (i < 0) throw new Error('Pagamento não encontrado.')
+    const [pg] = pagamentosDemo.splice(i, 1)
+    licencas[pg.empresa_id].licenca_vencimento = pg.vencimento_anterior
+    return pg.vencimento_anterior
   },
   async conexoes(empresaId) {
     redeOk()

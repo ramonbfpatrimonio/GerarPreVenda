@@ -22,6 +22,8 @@ const caminhos: Record<string, string> = {
   eventos: 'M4 6h16M4 12h16M4 18h10M18 16v4M16 18h4',
   imagem: 'M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M15 9h.01',
   cadeado: 'M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3',
+  ajustes: 'M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4',
+  dinheiro: 'M3 6h18v12H3zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 9v.01M18 15v.01',
   olho: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z'
 }
 
