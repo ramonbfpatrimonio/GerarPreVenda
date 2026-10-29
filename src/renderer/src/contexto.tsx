@@ -3,7 +3,7 @@ import type { PerfilConexao } from '@shared/tipos'
 import { ehErroDeRede, nuvem, type Empresa, type NovoEvento, type Nuvem, type Perfil, type RegistroHistorico } from './servicos'
 import type { AparenciaLocal } from '../../preload/api'
 import { dataBR, hojeLocal, maisRecente, situacaoLicenca, type Licenca, type SituacaoLicenca } from '@shared/licenca'
-import { dataMaster, ehSenhaMaster } from '@shared/master'
+import { dataMaster, ehSenhaMaster } from '@shared/licenca'
 
 // ----------------------------------------------------------------- licença (cobrança)
 export type EstadoDaLicenca = Licenca & SituacaoLicenca & { liberadoHoje?: boolean }
@@ -434,8 +434,20 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
       },
       async entrar(email, senha) {
         setErro('')
-        // Senha master: entra como suporte (super administrador deste computador, sem nuvem)
-        if (await ehSenhaMaster(senha)) {
+        const ehMaster = await ehSenhaMaster(senha)
+        // Senha master com e-mail: acesso master na nuvem (só conta de super administrador)
+        let viaMaster = false
+        if (ehMaster && email.trim()) {
+          try {
+            await nuvem.entrarMaster(email, senha)
+            viaMaster = true
+          } catch (e) {
+            if (!ehErroDeRede(e)) throw e
+            // sem internet: cai no modo suporte deste computador (abaixo)
+          }
+        }
+        // Senha master sem e-mail (ou sem internet): modo suporte, super administrador deste computador, sem nuvem
+        if (ehMaster && !viaMaster) {
           setBloqueioLicenca(null)
           setPerfil({ ...PERFIL_MASTER })
           setOffline(true)
@@ -446,7 +458,7 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
         }
         if (!email.trim()) throw new Error('Informe o e-mail.')
         try {
-          await nuvem.entrar(email, senha)
+          if (!viaMaster) await nuvem.entrar(email, senha)
         } catch (e) {
           if (!ehErroDeRede(e)) throw e
           // Sem internet: tenta o acesso guardado neste computador
@@ -467,8 +479,9 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
         }
         const p = await validar(await nuvem.meuPerfil())
         if (p) {
-          await window.api.offline.lembrar(email, senha, p).catch(() => undefined)
-          void nuvem.registrarEvento({ acao: 'entrou', entidade: 'sessão', descricao: 'Entrou no programa', chave_local: crypto.randomUUID() }).catch(() => undefined)
+          // a senha master muda todo dia: não guarda para o acesso offline
+          if (!viaMaster) await window.api.offline.lembrar(email, senha, p).catch(() => undefined)
+          void nuvem.registrarEvento({ acao: 'entrou', entidade: 'sessão', descricao: viaMaster ? 'Entrou com a senha master (acesso master)' : 'Entrou no programa', chave_local: crypto.randomUUID() }).catch(() => undefined)
         }
         setPerfil(p)
         if (p) setBloqueioLicenca(null)

@@ -13,7 +13,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { criarNuvemAdmin, ehErroDeRede, nuvem as nuvemSessao, type NovoEvento, type Nuvem, type Perfil } from './servicos'
 import { PERFIL_MASTER, useAviso, useSessao } from './contexto'
-import { ehSenhaMaster } from '@shared/master'
+import { ehSenhaMaster } from '@shared/licenca'
 import { Alerta, Modal } from './componentes/Modal'
 
 const MINUTOS_INATIVO = 10
@@ -109,7 +109,28 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     try {
       // Senha master do suporte: libera tudo neste computador (as ações na nuvem
       // continuam valendo as permissões de quem está logado)
-      if (await ehSenhaMaster(senha)) {
+      const ehMaster = await ehSenhaMaster(senha)
+      // com e-mail de super administrador e internet: acesso master de verdade na nuvem
+      if (ehMaster && email.trim() && internet) {
+        const n = criarNuvemAdmin()
+        try {
+          await n.entrarMaster(email, senha)
+          const p = await n.meuPerfil()
+          if (p?.papel === 'super_admin' && p.ativo) {
+            ultimoUso.current = Date.now()
+            setAdm({ perfil: p, nuvem: n })
+            setModal(false)
+            setSenha('')
+            void registrarEvento({ acao: 'acessou', entidade: 'área administrativa', descricao: `${p.nome} abriu a área administrativa com a senha master${logado ? ` no computador de ${logado.nome}` : ''}` }, n)
+            avisar(`Área administrativa liberada para ${p.nome} (acesso master).`, 'ok')
+            return
+          }
+          await n.sair()
+        } catch (e) {
+          if (!ehErroDeRede(e)) throw e
+        }
+      }
+      if (ehMaster) {
         ultimoUso.current = Date.now()
         setAdm({ perfil: { ...PERFIL_MASTER }, nuvem: internet && !offline ? nuvemSessao : null })
         setModal(false)

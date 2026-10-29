@@ -96,6 +96,8 @@ export interface ConexaoNuvem {
 export interface Nuvem {
   configurada: boolean
   entrar(email: string, senha: string): Promise<void>
+  /** Acesso master: super administrador entra com a senha master (Edge Function login-master). */
+  entrarMaster(email: string, senha: string): Promise<void>
   sair(): Promise<void>
   usuarioAtualId(): Promise<string | null>
   aoMudarSessao(fn: (logado: boolean) => void): () => void
@@ -270,6 +272,27 @@ function fabricar(obter: () => SupabaseClient): Nuvem {
     } catch (e) {
       throw new Error(traduzir((e as Error).message))
     }
+  },
+  async entrarMaster(email, senha) {
+    let token: string
+    try {
+      const { data, error } = await sb().functions.invoke('login-master', { body: { email: email.trim(), senha } })
+      if (error) {
+        // a função devolve { erro } no corpo das respostas 4xx
+        const ctx = (error as { context?: Response }).context
+        const corpo = ctx && typeof ctx.json === 'function' ? await ctx.json().catch(() => null) : null
+        if (corpo?.erro) throw new Error(corpo.erro)
+        if (/not found|404/i.test(error.message)) throw new Error('A função login-master ainda não foi publicada no Supabase (Edge Functions).')
+        throw new Error(traduzir(error.message))
+      }
+      if (data?.erro) throw new Error(data.erro)
+      token = data?.token_hash
+    } catch (e) {
+      throw new Error(traduzir((e as Error).message))
+    }
+    if (!token) throw new Error('Não foi possível entrar com a senha master.')
+    const { error } = await sb().auth.verifyOtp({ token_hash: token, type: 'magiclink' })
+    if (error) throw new Error(traduzir(error.message))
   },
   async sair() {
     try {

@@ -307,6 +307,13 @@ function fabricarDemo(quem: () => Perfil | null): Nuvem {
     logado = true
     ouvintes.forEach((f) => f(true))
   },
+  async entrarMaster(email) {
+    await espera(300)
+    redeOk()
+    if (!usuarios.some((u) => u.email === email.trim().toLowerCase() && u.papel === 'super_admin')) throw new Error('A senha master só vale para o acesso master (super administrador).')
+    logado = true
+    ouvintes.forEach((f) => f(true))
+  },
   async sair() {
     logado = false
     ouvintes.forEach((f) => f(false))
