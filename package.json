@@ -1,7 +1,7 @@
 {
   "name": "gerar-pre-venda",
   "productName": "Gerar Pré-Venda",
-  "version": "1.2.21",
+  "version": "1.2.22",
   "description": "Gera pré-vendas no ERP (SQL Server) a partir de pedidos de compra em PDF, com conexões por cliente",
   "author": "Ramon",
   "main": "./out/main/index.js",
