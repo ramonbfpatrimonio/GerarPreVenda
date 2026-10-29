@@ -55,11 +55,22 @@ Deno.serve(async (req) => {
   }
 
   const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } })
-  const { data: perfil } = await admin.from('perfis').select('id, papel, ativo').eq('email', email).maybeSingle()
+  // Acha o login pelo e-mail no Auth (o e-mail do perfil pode estar desatualizado)
+  let usuario: { id: string; email?: string } | undefined
+  for (let pagina = 1; pagina <= 20 && !usuario; pagina++) {
+    const { data: lista, error: e } = await admin.auth.admin.listUsers({ page: pagina, perPage: 200 })
+    if (e) return resposta({ erro: e.message }, 500)
+    usuario = lista.users.find((u) => (u.email ?? '').toLowerCase() === email)
+    if (lista.users.length < 200) break
+  }
+  const { data: perfil } = usuario
+    ? await admin.from('perfis').select('id, papel, ativo, email').eq('id', usuario.id).maybeSingle()
+    : { data: null }
   if (!perfil || perfil.papel !== 'super_admin' || !perfil.ativo) {
     await espera(800)
     return resposta({ erro: 'A senha master só vale para o acesso master (super administrador).' }, 403)
   }
+  if (perfil.email !== email) await admin.from('perfis').update({ email }).eq('id', perfil.id)
 
   // Gera um link de acesso de uso único (não envia e-mail); o programa troca pelo login.
   const { data, error } = await admin.auth.admin.generateLink({ type: 'magiclink', email })
