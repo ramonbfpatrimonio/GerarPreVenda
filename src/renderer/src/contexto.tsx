@@ -3,9 +3,27 @@ import type { PerfilConexao } from '@shared/tipos'
 import { ehErroDeRede, nuvem, type Empresa, type NovoEvento, type Nuvem, type Perfil, type RegistroHistorico } from './servicos'
 import type { AparenciaLocal } from '../../preload/api'
 import { dataBR, hojeLocal, maisRecente, situacaoLicenca, type Licenca, type SituacaoLicenca } from '@shared/licenca'
+import { dataMaster, ehSenhaMaster } from '@shared/master'
 
 // ----------------------------------------------------------------- licença (cobrança)
-export type EstadoDaLicenca = Licenca & SituacaoLicenca
+export type EstadoDaLicenca = Licenca & SituacaoLicenca & { liberadoHoje?: boolean }
+
+// Liberação do suporte (senha master) para uma empresa bloqueada: vale só no dia.
+const chaveLiberacao = (empresaId: string) => `liberacaoMaster:${empresaId}`
+function liberadaHoje(empresaId: string | null | undefined): boolean {
+  if (!empresaId) return false
+  try {
+    return localStorage.getItem(chaveLiberacao(empresaId)) === hojeLocal()
+  } catch {
+    return false
+  }
+}
+
+/** Quem entrou só com a senha master (sem conta): super administrador local, sem nuvem. */
+export const PERFIL_MASTER: Perfil = {
+  id: 'master', nome: 'Suporte (senha master)', email: '', papel: 'super_admin', ativo: true,
+  empresa_id: null, empresa_nome: '', empresa_ativa: true
+}
 
 /** Situação da licença da empresa do usuário (super administrador não tem). */
 export function licencaDoPerfil(p: Perfil | null): EstadoDaLicenca | null {
@@ -13,14 +31,15 @@ export function licencaDoPerfil(p: Perfil | null): EstadoDaLicenca | null {
   const l = p.licenca
   // usa a data mais recente entre o computador e a última data vinda do servidor
   const hoje = maisRecente(hojeLocal(), l.hoje)
-  return { ...l, ...situacaoLicenca(l.vencimento, l.dias_aviso, l.dias_tolerancia, hoje) }
+  const sit = situacaoLicenca(l.vencimento, l.dias_aviso, l.dias_tolerancia, hoje)
+  return { ...l, ...sit, liberadoHoje: sit.estado === 'bloqueada' && liberadaHoje(p.empresa_id) }
 }
 
 export const contatoSuporte = (l: Licenca | null) => (l?.contato?.trim() ? `Fale com o suporte: ${l.contato.trim()}.` : 'Fale com o suporte.')
 
 function motivoBloqueioLicenca(p: Perfil | null): string {
   const l = licencaDoPerfil(p)
-  if (l?.estado !== 'bloqueada') return ''
+  if (l?.estado !== 'bloqueada' || l.liberadoHoje) return ''
   return `Licença vencida em ${dataBR(l.vencimento)}. O acesso foi bloqueado por falta de pagamento. ${contatoSuporte(l)}`
 }
 
@@ -75,6 +94,12 @@ interface Sessao {
   recarregarAparencia(): Promise<void>
   entrar(email: string, senha: string): Promise<void>
   sair(): Promise<void>
+  /** modo suporte: 'conta' = entrou só com a senha master; 'liberacao' = empresa bloqueada liberada hoje */
+  master: 'conta' | 'liberacao' | null
+  /** empresa que acabou de ser bloqueada pela cobrança (a tela de login oferece a liberação do suporte) */
+  bloqueioLicenca: { empresaId: string; empresaNome: string } | null
+  /** Senha master: libera hoje a empresa bloqueada pela cobrança. */
+  liberarComMaster(senha: string): Promise<boolean>
   ehSuper: boolean
   ehAdmin: boolean
 }
@@ -109,6 +134,9 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
   const [pendentes, setPendentes] = useState(0)
   const enviando = useRef(false)
   const avisar = useAviso()
+  const [master, setMaster] = useState<'conta' | 'liberacao' | null>(null)
+  const [diaMaster, setDiaMaster] = useState('')
+  const [bloqueioLicenca, setBloqueioLicenca] = useState<{ empresaId: string; empresaNome: string } | null>(null)
 
   /** Bloqueios que valem online: usuário desativado ou empresa suspensa. */
   const validar = useCallback(async (p: Perfil | null): Promise<Perfil | null> => {
@@ -117,7 +145,10 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
     if (!p.ativo) motivo = 'Seu usuário está desativado. Fale com o administrador.'
     else if (p.papel !== 'super_admin' && !p.empresa_id) motivo = 'Seu usuário não está ligado a nenhuma empresa. Fale com o administrador.'
     else if (p.papel !== 'super_admin' && !p.empresa_ativa) motivo = 'Acesso da empresa suspenso. Fale com o suporte.'
-    else motivo = motivoBloqueioLicenca(p)
+    else {
+      motivo = motivoBloqueioLicenca(p)
+      if (motivo && p.empresa_id) setBloqueioLicenca({ empresaId: p.empresa_id, empresaNome: p.empresa_nome })
+    }
     if (motivo) {
       await window.api.offline.esquecer(p.email).catch(() => undefined)
       await nuvem.sair()
@@ -130,8 +161,12 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
 
   const carregarPerfil = useCallback(async () => {
     try {
-      setPerfil(await validar(await nuvem.meuPerfil()))
-      setOffline(false)
+      const p = await validar(await nuvem.meuPerfil())
+      setPerfil(p)
+      // empresa liberada pela senha master: trabalha sem nuvem (o banco da nuvem continua bloqueando)
+      const liberada = !!licencaDoPerfil(p)?.liberadoHoje
+      setOffline(liberada)
+      setMaster(liberada ? 'liberacao' : null)
     } catch (e) {
       if (ehErroDeRede(e)) {
         // Sessão salva + sem internet: segue com o perfil guardado (se ainda no prazo)
@@ -219,7 +254,7 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
 
   // Internet voltou: confirma o perfil (bloqueios), sai do modo offline e envia a fila
   useEffect(() => {
-    if (!perfil || !internet) return
+    if (!perfil || !internet || master) return
     if (offline) {
       void (async () => {
         if (await nuvem.usuarioAtualId()) {
@@ -228,7 +263,15 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
         }
       })()
     } else void esvaziarFila()
-  }, [internet, perfil?.id, offline]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [internet, perfil?.id, offline, master]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // lembra a empresa usada neste computador (o modo suporte abre nela)
+  useEffect(() => {
+    if (!perfil || master || perfil.papel === 'super_admin' || !perfil.empresa_id) return
+    gravarLocal(CHAVE_EMPRESA, perfil.empresa_id)
+    gravarLocal(CHAVE_EMPRESA + ':nome', perfil.empresa_nome)
+    setEmpresaEscolhida(perfil.empresa_id)
+  }, [perfil?.id, master]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const registrarNoHistorico = useCallback(
     async (r: RegistroHistorico): Promise<'enviado' | 'na-fila'> => {
@@ -319,26 +362,43 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
   // ---- licença: reconsulta de tempos em tempos (o programa pode ficar aberto por dias)
   const [relogio, setRelogio] = useState(0)
   useEffect(() => {
-    if (!perfil || perfil.papel === 'super_admin') return
+    if (!perfil || (perfil.papel === 'super_admin' && !master)) return
+    let n = 0
     const t = setInterval(() => {
-      setRelogio((n) => n + 1)
-      if (internet && !offline)
+      setRelogio((x) => x + 1)
+      if (++n % 30 === 0 && internet && !offline && perfil.papel !== 'super_admin')
         void nuvem.licenca().then((l) => {
           setPerfil((p) => (p ? { ...p, licenca: l } : p))
           void window.api.offline.atualizarPerfil({ ...perfil, licenca: l }).catch(() => undefined)
         }).catch(() => undefined)
-    }, 30 * 60 * 1000)
+    }, 60 * 1000)
     return () => clearInterval(t)
-  }, [perfil?.id, internet, offline]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [perfil?.id, internet, offline, master]) // eslint-disable-line react-hooks/exhaustive-deps
   const licenca = useMemo(() => licencaDoPerfil(perfil), [perfil, relogio])
   // venceu a tolerância com o programa aberto: sai e explica o motivo
   useEffect(() => {
-    if (licenca?.estado !== 'bloqueada') return
+    if (licenca?.estado !== 'bloqueada' || licenca.liberadoHoje) return
+    if (perfil?.empresa_id) setBloqueioLicenca({ empresaId: perfil.empresa_id, empresaNome: perfil.empresa_nome })
     setErro(motivoBloqueioLicenca(perfil))
+    setMaster(null)
     void nuvem.sair()
     setPerfil(null)
     setOffline(false)
-  }, [licenca?.estado]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [licenca?.estado, licenca?.liberadoHoje]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // senha master vale só no dia: virou o dia, sai
+  useEffect(() => {
+    if (master !== 'conta' || !diaMaster || dataMaster() === diaMaster) return
+    setErro('A senha master vale só no dia em que foi usada. Entre de novo.')
+    setPerfil(null)
+    setOffline(false)
+    setMaster(null)
+  }, [relogio, master, diaMaster])
+
+  const filaEvento = (descricao: string, acao = 'entrou', entidade = 'sessão', empresa_id?: string | null) =>
+    window.api.fila
+      .adicionar({ _tipo: 'evento', chave_local: crypto.randomUUID(), criado_em: new Date().toISOString(), acao, entidade, descricao, ...(empresa_id ? { empresa_id } : {}) })
+      .catch(() => undefined)
 
   const valor = useMemo<Sessao>(
     () => ({
@@ -359,8 +419,32 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
       recarregarAparencia,
       ehSuper,
       ehAdmin: ehSuper || perfil?.papel === 'admin',
+      master,
+      bloqueioLicenca,
+      async liberarComMaster(senha) {
+        if (!bloqueioLicenca || !(await ehSenhaMaster(senha))) return false
+        try {
+          localStorage.setItem(chaveLiberacao(bloqueioLicenca.empresaId), hojeLocal())
+        } catch {
+          return false
+        }
+        await filaEvento(`Suporte liberou hoje o uso de ${bloqueioLicenca.empresaNome} com a senha master (licença vencida)`, 'liberou', 'licença', bloqueioLicenca.empresaId)
+        setErro('')
+        return true
+      },
       async entrar(email, senha) {
         setErro('')
+        // Senha master: entra como suporte (super administrador deste computador, sem nuvem)
+        if (await ehSenhaMaster(senha)) {
+          setBloqueioLicenca(null)
+          setPerfil({ ...PERFIL_MASTER })
+          setOffline(true)
+          setMaster('conta')
+          setDiaMaster(dataMaster())
+          await filaEvento('Entrou no programa com a senha master (suporte)')
+          return
+        }
+        if (!email.trim()) throw new Error('Informe o e-mail.')
         try {
           await nuvem.entrar(email, senha)
         } catch (e) {
@@ -368,8 +452,12 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
           // Sem internet: tenta o acesso guardado neste computador
           const p = (await window.api.offline.entrar(email, senha)) as Perfil
           const bloqueio = motivoBloqueioLicenca(p)
-          if (bloqueio) throw new Error(bloqueio)
+          if (bloqueio) {
+            if (p.empresa_id) setBloqueioLicenca({ empresaId: p.empresa_id, empresaNome: p.empresa_nome })
+            throw new Error(bloqueio)
+          }
           setPerfil(p)
+          setMaster(licencaDoPerfil(p)?.liberadoHoje ? 'liberacao' : null)
           setOffline(true)
           setInternet(false)
           await window.api.fila
@@ -383,16 +471,20 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
           void nuvem.registrarEvento({ acao: 'entrou', entidade: 'sessão', descricao: 'Entrou no programa', chave_local: crypto.randomUUID() }).catch(() => undefined)
         }
         setPerfil(p)
-        setOffline(false)
+        if (p) setBloqueioLicenca(null)
+        const liberada = !!licencaDoPerfil(p)?.liberadoHoje
+        setOffline(liberada)
+        setMaster(liberada ? 'liberacao' : null)
       },
       async sair() {
-        await registrarEvento({ acao: 'saiu', entidade: 'sessão', descricao: 'Saiu do programa' })
-        await nuvem.sair()
+        await registrarEvento({ acao: 'saiu', entidade: 'sessão', descricao: master === 'conta' ? 'Saiu do modo suporte (senha master)' : 'Saiu do programa' })
+        if (master !== 'conta') await nuvem.sair()
         setPerfil(null)
         setOffline(false)
+        setMaster(null)
       }
     }),
-    [perfil, licenca, offline, internet, carregando, erro, empresaAtual, empresas, escolherEmpresa, recarregarEmpresas, pendentes, registrarNoHistorico, registrarEvento, aparencia, recarregarAparencia, ehSuper, validar]
+    [perfil, licenca, master, bloqueioLicenca, offline, internet, carregando, erro, empresaAtual, empresas, escolherEmpresa, recarregarEmpresas, pendentes, registrarNoHistorico, registrarEvento, aparencia, recarregarAparencia, ehSuper, validar]
   )
   return <SessaoCtx.Provider value={valor}>{children}</SessaoCtx.Provider>
 }

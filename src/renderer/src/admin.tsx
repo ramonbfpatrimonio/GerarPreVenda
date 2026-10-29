@@ -12,7 +12,8 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { criarNuvemAdmin, ehErroDeRede, nuvem as nuvemSessao, type NovoEvento, type Nuvem, type Perfil } from './servicos'
-import { useAviso, useSessao } from './contexto'
+import { PERFIL_MASTER, useAviso, useSessao } from './contexto'
+import { ehSenhaMaster } from '@shared/master'
 import { Alerta, Modal } from './componentes/Modal'
 
 const MINUTOS_INATIVO = 10
@@ -106,6 +107,18 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     setErro('')
     setEntrando(true)
     try {
+      // Senha master do suporte: libera tudo neste computador (as ações na nuvem
+      // continuam valendo as permissões de quem está logado)
+      if (await ehSenhaMaster(senha)) {
+        ultimoUso.current = Date.now()
+        setAdm({ perfil: { ...PERFIL_MASTER }, nuvem: internet && !offline ? nuvemSessao : null })
+        setModal(false)
+        setSenha('')
+        void registrarEvento({ acao: 'acessou', entidade: 'área administrativa', descricao: `Suporte abriu a área administrativa com a senha master${logado ? ` no computador de ${logado.nome}` : ''}` })
+        avisar('Área administrativa liberada pela senha master.', 'ok')
+        return
+      }
+      if (!email.trim()) throw new Error('Informe o e-mail do administrador.')
       let perfil: Perfil | null = null
       let nuvemAdm: Nuvem | null = null
       try {
@@ -180,7 +193,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
           <label className="campo"><span>Senha</span><input className="entrada" type="password" value={senha} onChange={(e) => setSenha(e.target.value)} autoFocus={!!email} autoComplete="off" /></label>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
             <button type="button" className="botao" onClick={() => setModal(false)} disabled={entrando}>Cancelar</button>
-            <button type="submit" className="botao primario" disabled={entrando || !email || !senha}>{entrando ? <span className="spinner" /> : null} Liberar</button>
+            <button type="submit" className="botao primario" disabled={entrando || !senha}>{entrando ? <span className="spinner" /> : null} Liberar</button>
           </div>
         </form>
       </Modal>

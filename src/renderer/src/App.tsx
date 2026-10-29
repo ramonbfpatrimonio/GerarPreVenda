@@ -73,16 +73,16 @@ function Programa() {
             <div key={i.id}>
               {n === 2 && <div className="nav-separador">Administração</div>}
               <button className={aba === i.id ? 'ativo' : ''} onClick={() => setAba(i.id)} aria-current={aba === i.id ? 'page' : undefined}>
-                <Icone nome={i.icone} /> {i.rotulo}
+                <Icone nome={i.icone} /> <span className="rotulo-nav">{i.rotulo}</span>
               </button>
             </div>
           ))}
           {admin.perfil && !admin.automatico && (
             <button className="nav-fechar-admin" onClick={() => admin.fechar()}>
-              <Icone nome="cadeado" /> Fechar administração
+              <Icone nome="cadeado" /> <span className="rotulo-nav">Fechar administração</span>
             </button>
           )}
-          <div className="rodape">Versão {versao}</div>
+          <div className="rodape"><span className="rotulo-nav">Versão </span>{versao}</div>
         </nav>
         {/* O pedido fica montado o tempo todo para não perder o que foi feito ao trocar de aba. */}
         <Pagina_Pedido visivel={aba === 'pedido'} />

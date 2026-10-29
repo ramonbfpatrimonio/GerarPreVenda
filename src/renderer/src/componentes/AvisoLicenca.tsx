@@ -23,7 +23,7 @@ function textos(l: EstadoDaLicenca) {
 
 /** Faixa de aviso de vencimento (todos os usuários) e janela no primeiro acesso do dia. */
 export function AvisoLicenca() {
-  const { licenca } = useSessao()
+  const { licenca, master } = useSessao()
   const [janela, setJanela] = useState(false)
   const mostrar = licenca && (licenca.estado === 'vencendo' || licenca.estado === 'atrasada')
   const chave = mostrar ? `licenca-aviso:${licenca.vencimento}:${licenca.estado}` : ''
@@ -37,6 +37,20 @@ export function AvisoLicenca() {
     setJanela(true)
   }, [chave])
 
+  if (master === 'conta')
+    return (
+      <div className="aviso-licenca suporte" role="status">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3" /></svg>
+        <span>Modo suporte (senha master): sem acesso à nuvem, usando as conexões e senhas deste computador. Vale até o fim do dia.</span>
+      </div>
+    )
+  if (licenca?.liberadoHoje)
+    return (
+      <div className="aviso-licenca atrasada" role="status">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /></svg>
+        <span>Licença vencida em {dataBR(licenca.vencimento)}. Uso liberado pelo suporte só hoje, sem acesso à nuvem (o histórico fica guardado neste computador). {contatoSuporte(licenca)}</span>
+      </div>
+    )
   if (!mostrar) return null
   const t = textos(licenca)
   const atrasada = licenca.estado === 'atrasada'
